@@ -8,4 +8,4 @@ App web pour suivre une sèche depuis son téléphone : repas (liste, texte libr
 
 Mettre à jour le SDK embarqué : `npm install && npm run vendor`.
 
-Dessin anatomique adapté de [react-body-highlighter](https://github.com/HichamELBSI/react-native-body-highlighter) (licence MIT, voir `licenses/`).
+Dessin anatomique adapté de [@mjcdev/react-body-highlighter](https://www.npmjs.com/package/@mjcdev/react-body-highlighter) (licence MIT, voir `licenses/`).
