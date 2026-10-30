@@ -1,0 +1,12 @@
+{
+  "name": "carnet-de-seche",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "vendor": "esbuild vendor-src/anthropic-entry.js --bundle --format=esm --minify --platform=browser --outfile=vendor/anthropic.mjs"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "0.135.0",
+    "esbuild": "0.25.10"
+  }
+}
