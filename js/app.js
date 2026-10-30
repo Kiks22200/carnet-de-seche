@@ -217,7 +217,7 @@ const TPLS = [
 ];
 const EX = {
   rowing_large: { n: "Tirage horizontal assis, prise large", alias: "Assis, je tire la barre vers le torse, prise large", pri: ["upper", "rdelt"], sec: ["lats", "bi"], mus: "Rhomboïdes, trapèzes moyens et inférieurs, deltoïdes postérieurs", why: "La prise large avec les coudes écartés (environ 60 à 80° du buste) met l'accent sur le haut du dos : les muscles entre les omoplates et l'arrière des épaules. Avec une poignée serrée (triangle) et les coudes collés au corps, le grand dorsal travaille davantage. Les deux versions font travailler tout le dos, seule la répartition change.", cue: "Poitrine sortie, tire avec les coudes et pas avec les mains, serre les omoplates une seconde, puis laisse revenir lentement. Le buste ne bascule pas en arrière pour aider.", rr: [8, 12], inc: 5 },
-  tirage_uni_assis: { n: "Tirage unilatéral à la poulie, coude haut", alias: "Assis par terre, une seule poignée, poulie un peu haute", pri: ["rdelt", "upper"], sec: ["bi"], mus: "Deltoïde postérieur, trapèze moyen, rhomboïdes, infra-épineux", why: "En tirant avec le coude qui monte à hauteur d'épaule et part vers l'arrière, c'est l'arrière de l'épaule qui fait le travail. Ce muscle est souvent faible chez ceux qui font beaucoup de pecs, et le renforcer aide à garder des épaules saines.", cue: "Coude haut, imagine que tu donnes un coup de coude derrière toi. Pause d'une seconde, retour contrôlé. Charge modérée : si le dos se tord, c'est trop lourd.", rr: [10, 15], inc: 2.5 },
+  tirage_uni_assis: { n: "Tirage vertical unilatéral, assis au sol", alias: "Assis par terre, une poignée, poulie presque tout en haut, je ramène le coude le long du corps", pri: ["lats"], sec: ["upper", "bi"], mus: "Grand dorsal, grand rond, rhomboïdes, biceps", why: "La poulie haute et le coude qui descend le long du corps en font un tirage vertical : c'est le grand dorsal qui travaille, le muscle de la largeur du dos. Le faire à un bras permet d'aller plus loin dans l'étirement en haut et dans la contraction en bas.", cue: "Laisse le bras monter jusqu'à sentir l'étirement sous l'aisselle, puis tire le coude vers la hanche, près du corps. Le buste reste droit, sans tourner ni se pencher pour aider.", rr: [10, 15], inc: 2.5 },
   rowing_haltere: { n: "Rowing haltère un bras", alias: "À quatre pattes sur le banc, un haltère", pri: ["lats", "upper"], sec: ["rdelt", "bi"], mus: "Grand dorsal, rhomboïdes, trapèzes, biceps", why: "Un excellent exercice pour le grand dorsal sans machine. Tu travailles un côté à la fois, donc tu vois tout de suite si un côté est plus faible.", cue: "Ramène le coude vers la hanche (pas vers l'aisselle) : ce trajet sollicite davantage le grand dorsal. Dos plat, la main d'appui sous l'épaule.", rr: [8, 12], inc: 2.5 },
   shrugs: { n: "Shrugs haltères", alias: "Deux haltères, je remonte les épaules vers les oreilles", pri: ["traps"], sec: ["fore"], start: 30, mus: "Trapèzes supérieurs", why: "Le haut des trapèzes donne l'épaisseur entre le cou et les épaules. L'exercice charge aussi la poigne.", cue: "Monte droit vers les oreilles, tiens 1 à 2 secondes en haut, redescends lentement. Ne fais pas rouler les épaules.", rr: [10, 15], inc: 2.5 },
   hyperext: { n: "Extensions lombaires au banc à 45°", alias: "Banc en diagonale bloqué en haut des cuisses, un disque", pri: ["lower"], sec: ["glutes", "hams"], mus: "Érecteurs du rachis (lombaires), fessiers, ischio-jambiers", why: "Renforce le bas du dos et les fessiers, utiles sur tous les tirages et la presse.", cue: "Descends en contrôlant, remonte jusqu'à ce que le corps soit aligné, sans te cambrer au-delà. Disque serré contre la poitrine.", rr: [10, 15], inc: 5 },
@@ -242,6 +242,14 @@ const EX = {
   ecarte_poulie: { n: "Écarté à la poulie vis-à-vis", alias: "Debout entre deux poulies", pri: ["chest"], sec: [], sugg: "Alternative au pec deck.", mus: "Grand pectoral", why: "Tension constante sur les pecs tout le long du mouvement.", cue: "Léger pas en avant, bras légèrement fléchis, rapproche les mains devant la poitrine.", rr: [12, 20], inc: 1.25 },
   barre_front: { n: "Barre au front", alias: "Couché, barre EZ vers le front", pri: ["tri"], sec: [], sugg: "Triceps, alternative à la poulie.", mus: "Triceps (toutes les portions)", why: "Charge lourde possible sur les triceps.", cue: "Coudes fixes vers le plafond, descends la barre vers le front, remonte.", rr: [8, 12], inc: 2.5 }
 };
+// Catalogue fusionné : exercices de base + exercices créés ou modifiés dans l'appli
+function XM() {
+  if (MEMO.ex) return MEMO.ex;
+  const c = S.profile.customEx || {}, m = { ...EX };
+  for (const [k, v] of Object.entries(c)) m[k] = { ...(EX[k] || {}), ...v };
+  return (MEMO.ex = m);
+}
+function applyTplNames() { const c = S.profile.tplNames || {}; TPLS.forEach(t => { if (!t.n0) t.n0 = t.n; t.n = (c[t.k] || "").trim() || t.n0; }); }
 const DEFAULT_PROGRAM = {
   dos: ["rowing_large", "tirage_uni_assis", "rowing_haltere", "shrugs", "hyperext", "tri_corde", "tri_nuque"],
   pecs: ["dc_halteres", "pec_deck", "incline_smith", "curl_incline", "curl_marteau"],
@@ -392,6 +400,7 @@ const view = document.getElementById("view");
 const $ = id => document.getElementById(id);
 function render() {
   fresh();
+  applyTplNames();
   const setup = S.profile.setup;
   $("top").hidden = !setup; $("tabbar").hidden = !setup;
   if (!setup) { view.innerHTML = viewOnboarding(); return; }
@@ -488,6 +497,8 @@ function viewJour() {
   if (isToday && p.tendon && (D.pain >= 5 || (pt != null && pt >= 1.5))) {
     tips.push(`<div class="note"><b>Ta blessure :</b> ${D.pain >= 5 ? "douleur à " + D.pain + "/10 aujourd'hui" : "la douleur monte depuis quelques jours"}. Remplace la marche par du vélo léger ou du repos, saute les exercices qui font mal et parles-en à ton médecin. Consulte vite en cas de claquement, de gonflement ou si tu ne peux plus pousser sur le pied ou tendre le genou.</div>`);
   }
+  const nDays = Object.keys(S.days).length, lastExp = p.lastExport;
+  if (isToday && nDays >= 5 && (!lastExp || diffDays(lastExp, today()) >= 7)) tips.push(`<div class="card" style="gap:8px"><b>💾 Pense à ta sauvegarde</b><span class="small muted">Tes données sont sur ce téléphone. ${lastExp ? "Dernière sauvegarde le " + fmtD(lastExp) + "." : "Tu n'as encore jamais fait de sauvegarde."} Un fichier par semaine suffit.</span><button class="btn small sun" data-act="export">Sauvegarder maintenant</button></div>`);
   const wd = new Date().getDay();
   if (isToday && (wd === 0 || wd === 1) && !UI.coach && Object.keys(S.days).length >= 4) tips.push(`<button class="blk b-mint" data-act="go-coach" style="text-align:left"><span class="mono">Dimanche, jour de bilan</span><b style="font-family:var(--f-display);font-size:20px">Faire le bilan de la semaine →</b></button>`);
   if (tips.length) h += `<section>${tips.join("")}</section>`;
@@ -589,18 +600,18 @@ function regionDetail(vals, ctx) {
     const v = vals[g] || 0;
     const tag = ctx === "week" ? (v === 0 ? `<span class="tag t-none">Pas travaillé</span>` : v < 8 ? `<span class="tag t-warn">${fkg(v)} séries · vise 8</span>` : v <= 15 ? `<span class="tag t-ok">${fkg(v)} séries · bonne zone</span>` : `<span class="tag t-blue">${fkg(v)} séries · largement</span>`) : `<span class="tag ${v ? "t-blue" : "t-none"}">${v ? fkg(v) + " séries aujourd'hui" : "Pas aujourd'hui"}</span>`;
     const rows = [];
-    TPLS.forEach(t => program()[t.k].forEach(id => { const ex = EX[id]; if (!ex) return; if (ex.pri.includes(g)) rows.push([ex.n, "principal", t.n, 0]); else if (ex.sec.includes(g)) rows.push([ex.n, "en aide", t.n, 1]); }));
+    TPLS.forEach(t => program()[t.k].forEach(id => { const ex = XM()[id]; if (!ex) return; if (ex.pri.includes(g)) rows.push([ex.n, "principal", t.n, 0]); else if (ex.sec.includes(g)) rows.push([ex.n, "en aide", t.n, 1]); }));
     rows.sort((a, b) => a[3] - b[3]);
-    const add = Object.keys(EX).filter(k => !inProg.includes(k) && EX[k].pri.includes(g)).slice(0, 2);
+    const add = Object.keys(XM()).filter(k => !inProg.includes(k) && XM()[k].pri.includes(g)).slice(0, 2);
     return `<div style="display:grid;gap:6px"><div class="row between"><b style="font-family:var(--f-display);font-size:19px">${GROUPS[g]}</b>${tag}</div><p class="small">${esc(GDESC[g])}</p>
       ${rows.length ? `<div class="exl">${rows.map(x => `<div><span>${esc(x[0])}</span><span class="muted">${x[1]} · ${esc(x[2].split(" ")[0])}</span></div>`).join("")}</div>` : `<p class="small muted">Aucun exercice de ton programme ne le travaille directement.</p>`}
-      ${add.length ? `<p class="small muted">Pour le cibler : ${add.map(k => esc(EX[k].n)).join(", ")}.</p>` : ""}</div>`;
+      ${add.length ? `<p class="small muted">Pour le cibler : ${add.map(k => esc(XM()[k].n)).join(", ")}.</p>` : ""}</div>`;
   }).join(`<hr style="border:0;border-top:2px solid var(--soft);margin:4px 0">`)}</div>`;
 }
 const emptyVol = () => Object.fromEntries(Object.keys(GROUPS).map(g => [g, 0]));
 function addVolume(vol, exList, onlyDone) {
   exList.forEach(e => {
-    const n = onlyDone ? e.sets.filter(x => +x.reps > 0).length : e.sets.length, ex = EX[e.id];
+    const n = onlyDone ? e.sets.filter(x => +x.reps > 0).length : e.sets.length, ex = XM()[e.id];
     if (!ex || !n) return;
     ex.pri.forEach(g => vol[g] += n); ex.sec.forEach(g => vol[g] += n * 0.5);
   });
@@ -622,7 +633,7 @@ function historyFor(exId, excludeId, max) {
 const e1rm = st => (+st.kg || 0) * (1 + (+st.reps || 0) / 30);
 function bestE1RM(exId, excludeId) { let b = 0; historyFor(exId, excludeId, 999).forEach(h => h.sets.forEach(st => { b = Math.max(b, e1rm(st)); })); return b; }
 function targetFor(exId, excludeId) {
-  const ex = EX[exId], last = historyFor(exId, excludeId, 1)[0];
+  const ex = XM()[exId], last = historyFor(exId, excludeId, 1)[0];
   const first = ex.start ? { kg: ex.start, reps: ex.rr[0], msg: "Ta charge habituelle. Vise " + ex.rr[0] + " à " + ex.rr[1] + " reps." } : { kg: "", reps: ex.rr[0], msg: "Première fois : prends une charge qui te permet " + ex.rr[0] + " à " + ex.rr[1] + " reps propres." };
   if (!last || last.sets.every(s => s.kg === "" || s.kg == null)) return first;
   const kg = Math.max(...last.sets.map(s => +s.kg || 0)), atKg = last.sets.filter(s => (+s.kg || 0) === kg);
@@ -651,14 +662,19 @@ function viewCorps() {
   const low = Object.entries(vol).filter(([g, v]) => v > 0 && v < 8 && g !== "abs").map(([g]) => GROUPS[g].toLowerCase());
   if (low.length) h += `<p class="small muted">Chaque muscle n'est travaillé qu'une fois par semaine avec ta rotation. Sous 8 séries (${esc(low.slice(0, 4).join(", "))}), ajoute une 4e série sur le premier exercice du muscle.</p>`;
   h += `<section><h2>Séance du jour</h2><div class="tpls">${TPLS.map(t => `<button class="blk ${t.col} tpl" data-act="start" data-k="${t.k}"><div class="row between"><b>${t.n}</b>${t.k === nx ? `<span class="tag" style="background:#fff">Conseillée</span>` : ""}</div><span class="small">${t.d}</span><span class="mono">${lastBy[t.k] ? "Dernière : " + fmtD(lastBy[t.k], true) : "Pas encore faite"}</span></button>`).join("")}</div></section>`;
-  h += `<section><div class="row between"><h2>Ton programme</h2><button class="btn small" data-act="edit-prog">${UI.editProgram ? "Terminé" : "Modifier"}</button></div>`;
+  h += `<section><div class="row between"><h2>Ton programme</h2><button class="btn small ${UI.editProgram ? "sun" : ""}" data-act="edit-prog">${UI.editProgram ? "Terminé" : "Modifier"}</button></div>
+    ${UI.editProgram ? `<p class="small muted">Change l'ordre, retire, ajoute ou crée tes exercices. Touche ✎ pour modifier un exercice : nom, muscles, répétitions.</p>` : ""}`;
   for (const t of TPLS) {
-    h += `<div class="card"><b style="font-family:var(--f-display);font-size:19px">${t.n}</b>${program()[t.k].map((exId, i) => `<div class="row between"><div style="min-width:0;flex:1;display:grid;gap:4px"><span>${esc(EX[exId].n)}</span><div class="mus">${EX[exId].pri.map(g => `<span>${GROUPS[g]}</span>`).join("")}${EX[exId].sec.map(g => `<span class="sec">${GROUPS[g]}</span>`).join("")}</div></div>${UI.editProgram ? `<div class="row"><button class="btn small flat" data-act="mv" data-t="${t.k}" data-i="${i}" aria-label="Monter">↑</button><button class="btn small flat" data-act="rm-ex" data-t="${t.k}" data-i="${i}">Retirer</button></div>` : ""}</div>`).join("")}
-      ${UI.editProgram ? `<label class="field" for="add-${t.k}">Ajouter un exercice<select id="add-${t.k}" data-addex="${t.k}"><option value="">Choisir…</option>${Object.entries(EX).filter(([k]) => !program()[t.k].includes(k)).map(([k, e]) => `<option value="${k}">${esc(e.n)}${e.sugg ? " (suggéré)" : ""}</option>`).join("")}</select></label>` : ""}</div>`;
+    const list = program()[t.k];
+    h += `<div class="card">${UI.editProgram ? `<label class="field" for="tpl-${t.k}">Nom de la séance<input type="text" id="tpl-${t.k}" data-tplname="${t.k}" value="${esc(t.n)}"></label>` : `<b style="font-family:var(--f-display);font-size:19px">${esc(t.n)}</b>`}
+      ${list.map((exId, i) => { const ex = XM()[exId]; if (!ex) return ""; return `<div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><div style="min-width:0;flex:1;display:grid;gap:4px"><span>${esc(ex.n)}${S.profile.customEx && S.profile.customEx[exId] ? ` <span class="tag t-blue">perso</span>` : ""}</span><div class="mus">${ex.pri.map(g => `<span>${GROUPS[g]}</span>`).join("")}${ex.sec.map(g => `<span class="sec">${GROUPS[g]}</span>`).join("")}</div></div>
+        <div class="row" style="gap:4px;flex-wrap:nowrap">${UI.editProgram ? `<button class="round" style="width:36px;height:36px;box-shadow:none" data-act="mv" data-t="${t.k}" data-i="${i}" data-v="-1" aria-label="Monter ${esc(ex.n)}" ${i === 0 ? "disabled" : ""}>↑</button><button class="round" style="width:36px;height:36px;box-shadow:none" data-act="mv" data-t="${t.k}" data-i="${i}" data-v="1" aria-label="Descendre ${esc(ex.n)}" ${i === list.length - 1 ? "disabled" : ""}>↓</button>` : ""}<button class="round" style="width:36px;height:36px;box-shadow:none" data-act="ex-edit" data-id="${exId}" data-t="${t.k}" aria-label="Modifier ${esc(ex.n)}">✎</button></div></div>`; }).join("")}
+      ${UI.editProgram ? `<label class="field" for="add-${t.k}">Ajouter un exercice existant<select id="add-${t.k}" data-addex="${t.k}"><option value="">Choisir…</option>${Object.entries(XM()).filter(([k]) => !list.includes(k)).map(([k, e]) => `<option value="${k}">${esc(e.n)}${e.sugg ? " (suggéré)" : ""}</option>`).join("")}</select></label>
+      <button class="btn small sun" data-act="ex-new" data-t="${t.k}">+ Créer un exercice</button>` : ""}</div>`;
   }
   const inProg = Object.values(program()).flat();
-  const sk = !inProg.includes("tirage_vertical") ? "tirage_vertical" : Object.keys(EX).find(k => EX[k].sugg && !inProg.includes(k));
-  if (sk) h += `<div class="note info"><b>Mon conseil :</b> ${esc(EX[sk].sugg)}</div>`;
+  const sk = !inProg.includes("tirage_vertical") && !inProg.includes("tirage_uni_assis") ? "tirage_vertical" : Object.keys(XM()).find(k => XM()[k].sugg && !inProg.includes(k));
+  if (sk) h += `<div class="note info"><b>Mon conseil :</b> ${esc(XM()[sk].sugg)}</div>`;
   h += `</section>`;
   const done = sessionsSorted().filter(s => s.done).slice(0, 8);
   h += `<section><h2>Historique</h2>${done.length ? `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Séance</th><th>Séries</th><th>Records</th><th>Tonnage</th><th></th></tr></thead><tbody>${done.map(s => {
@@ -672,10 +688,10 @@ function viewActiveSession(id) {
   let h = `<section class="blk ${tpl.col}"><div class="row between"><div><span class="mono">${s.done ? "Séance du " + fmtD(s.date, true) : "En cours"}</span><h2>${tpl.n}</h2></div><button class="btn small" data-act="leave-sess">${s.done ? "Retour" : "Pause"}</button></div></section>
     <section>${bodyStage(addVolume(emptyVol(), s.ex, false), "sess", "Muscles du jour")}</section>`;
   s.ex.forEach((e, ei) => {
-    const ex = EX[e.id]; if (!ex) return;
+    const ex = XM()[e.id]; if (!ex) return;
     const t = targetFor(e.id, id), hist = historyFor(e.id, id), best = bestE1RM(e.id, id);
     h += `<article class="card">
-      <div><h3>${esc(ex.n)}</h3><span class="small muted"><i>${esc(ex.alias)}</i></span></div>
+      <div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><div style="min-width:0"><h3>${esc(ex.n)}</h3><span class="small muted"><i>${esc(ex.alias)}</i></span></div><button class="round" style="width:36px;height:36px;box-shadow:none" data-act="ex-edit" data-id="${e.id}" data-t="${s.tpl}" aria-label="Modifier ${esc(ex.n)}">✎</button></div>
       <div class="mus">${ex.pri.map(g => `<span>${GROUPS[g]}</span>`).join("")}${ex.sec.map(g => `<span class="sec">${GROUPS[g]}</span>`).join("")}</div>
       ${s.done ? "" : `<div class="target">Objectif : <b>${t.kg !== "" ? fkg(t.kg) + " kg" : "charge à trouver"} × ${t.reps}</b><br><span class="small">${esc(t.msg)}</span>${hist[0] ? `<br><span class="small muted">Dernière fois : ${hist[0].sets.map(x => fkg(x.kg) + "×" + x.reps).join(", ")}</span>` : ""}</div>`}
       ${ex.tendon && S.profile.tendon ? `<div class="note small">Blessure : reste sous 3/10 de douleur pendant l'exercice, et celle du lendemain matin ne doit pas monter d'une semaine à l'autre. Les jambes se font avec l'accord de ton chirurgien.</div>` : ""}
@@ -693,6 +709,69 @@ function viewActiveSession(id) {
     ${s.tpl === "jambes" ? `<label class="row" for="abdos"><input type="checkbox" id="abdos" data-flag="abdos" ${s.abdos ? "checked" : ""}> Circuit abdos (5 à 10 min)</label>` : ""}
     <div class="row">${s.done ? `<button class="btn" data-act="del-sess">Supprimer la séance</button>` : `<button class="btn hot" data-act="finish">Terminer la séance</button><button class="btn" data-act="del-sess">Annuler</button>`}</div></section>`;
   return h;
+}
+
+/* ---------- Éditeur d'exercice ---------- */
+let X = null;
+function openExEditor(id, tpl) {
+  const base = id ? XM()[id] : null;
+  openShell();
+  X = { id, tpl, isNew: !id, n: base ? base.n : "", alias: base ? base.alias || "" : "", pri: base ? [...base.pri] : [], sec: base ? [...base.sec] : [], rmin: base ? base.rr[0] : 10, rmax: base ? base.rr[1] : 15, inc: base ? base.inc : 2.5, start: base && base.start != null ? base.start : "", mus: base ? base.mus || "" : "", why: base ? base.why || "" : "", cue: base ? base.cue || "" : "", tendon: base ? !!base.tendon : false, busy: false, err: "", fresh: true };
+  renderExEditor();
+}
+function syncX() {
+  const v = id => ($(id) || {}).value;
+  if (!$("x-n")) return;
+  X.n = v("x-n"); X.alias = v("x-alias"); X.rmin = +v("x-rmin") || X.rmin; X.rmax = +v("x-rmax") || X.rmax; X.inc = +String(v("x-inc")).replace(",", ".") || X.inc;
+  const st = String(v("x-start")).replace(",", "."); X.start = st === "" ? "" : +st; X.mus = v("x-mus"); X.why = v("x-why"); X.cue = v("x-cue");
+}
+function renderExEditor() {
+  const chips = (field) => `<div class="row" style="gap:6px">${Object.entries(GROUPS).map(([g, n]) => `<button class="chip" data-act="x-mus" data-f="${field}" data-g="${g}" aria-pressed="${X[field].includes(g)}">${n}</button>`).join("")}</div>`;
+  const isBase = X.id && EX[X.id], isCustom = X.id && S.profile.customEx && S.profile.customEx[X.id];
+  const body = `<label class="field" for="x-n">Nom de l'exercice<input type="text" id="x-n" value="${esc(X.n)}" placeholder="Ex. : Tirage vertical unilatéral"></label>
+    <label class="field" for="x-alias">Comment tu le fais<textarea id="x-alias" placeholder="Ex. : assis par terre, poulie tout en haut, je ramène le coude près du corps">${esc(X.alias)}</textarea></label>
+    <button class="btn hot" data-act="x-ai" ${X.busy ? "disabled" : ""}>${X.busy ? `<span class="spin"></span> Claude analyse…` : "✨ Compléter avec Claude"}</button>
+    ${X.err ? `<div class="note">${esc(X.err)}</div>` : `<p class="small muted">Claude déduit les muscles, la fourchette de répétitions et les consignes à partir de ta description. Tu peux tout corriger ensuite.</p>`}
+    <div><b>Muscles principaux</b>${chips("pri")}</div>
+    <div><b>Muscles qui aident</b>${chips("sec")}</div>
+    <div class="fields"><label class="field" for="x-rmin">Reps min<input type="number" id="x-rmin" inputmode="numeric" value="${X.rmin}"></label><label class="field" for="x-rmax">Reps max<input type="number" id="x-rmax" inputmode="numeric" value="${X.rmax}"></label>
+      <label class="field" for="x-inc">Palier de charge (kg)<input type="number" id="x-inc" inputmode="decimal" step="0.25" value="${X.inc}"></label><label class="field" for="x-start">Charge habituelle (kg)<input type="number" id="x-start" inputmode="decimal" step="0.25" value="${X.start}"></label></div>
+    <details class="learn" ${X.mus || X.why ? "open" : ""}><summary>Explications</summary>
+      <label class="field" for="x-mus">Muscles en détail<input type="text" id="x-mus" value="${esc(X.mus)}"></label>
+      <label class="field" for="x-why">Pourquoi cet exercice<textarea id="x-why">${esc(X.why)}</textarea></label>
+      <label class="field" for="x-cue">Placement<textarea id="x-cue">${esc(X.cue)}</textarea></label></details>
+    <div class="row">${!X.isNew && X.tpl ? `<button class="btn small" data-act="x-remove">Retirer de la séance</button>` : ""}${isBase && isCustom ? `<button class="btn small flat" data-act="x-reset">Revenir à l'original</button>` : ""}</div>`;
+  $("sheet").hidden = false;
+  $("sheet").innerHTML = sheetHTML({ title: X.isNew ? "Nouvel exercice" : "Modifier l'exercice", id: "x-title", enter: X.fresh, body, foot: `<span class="small muted">${X.tpl ? "Séance : " + esc((TPLS.find(t => t.k === X.tpl) || {}).n || "") : ""}</span><button class="btn hot" data-act="x-save">Enregistrer</button>` });
+  if (X.fresh) $("x-n").focus();
+  X.fresh = false;
+}
+function saveExEditor() {
+  syncX();
+  if (!X.n.trim()) { toast("Donne un nom à l'exercice"); return; }
+  if (!X.pri.length) { toast("Choisis au moins un muscle principal"); return; }
+  const rmin = clamp(Math.round(X.rmin), 1, 50), rmax = clamp(Math.round(X.rmax), rmin, 60);
+  const data = { n: X.n.trim(), alias: X.alias.trim(), pri: X.pri, sec: X.sec.filter(g => !X.pri.includes(g)), rr: [rmin, rmax], inc: X.inc > 0 ? X.inc : 2.5, mus: X.mus.trim() || X.pri.map(g => GROUPS[g]).join(", "), why: X.why.trim(), cue: X.cue.trim(), tendon: X.tendon };
+  if (X.start !== "" && X.start > 0) data.start = X.start;
+  const id = X.id || "c_" + uid();
+  S.profile.customEx = { ...(S.profile.customEx || {}), [id]: data };
+  if (X.isNew && X.tpl) { const pr = JSON.parse(JSON.stringify(program())); pr[X.tpl].push(id); S.profile.program = pr; }
+  save(); closeSheet(); X = null; render();
+  toast("Exercice enregistré");
+}
+async function exAI() {
+  syncX();
+  if (!X.n.trim() && !X.alias.trim()) { X.err = "Écris au moins le nom ou comment tu fais l'exercice."; renderExEditor(); return; }
+  if (!hasKey()) { X.err = "Ajoute ta clé API dans Réglages pour que Claude complète l'exercice."; renderExEditor(); return; }
+  const x = X; x.busy = true; x.err = ""; renderExEditor();
+  const keys = Object.keys(GROUPS);
+  const schema = { type: "object", additionalProperties: false, required: ["n", "pri", "sec", "rmin", "rmax", "inc", "mus", "why", "cue", "tendon"], properties: { n: { type: "string" }, pri: { type: "array", items: { type: "string", enum: keys } }, sec: { type: "array", items: { type: "string", enum: keys } }, rmin: { type: "integer" }, rmax: { type: "integer" }, inc: { type: "number" }, mus: { type: "string" }, why: { type: "string" }, cue: { type: "string" }, tendon: { type: "boolean" } } };
+  try {
+    const r = await askJSON({ system: systemPrompt().split("Règles :")[0] + "Tu es aussi son coach en musculation. Réponds en français.", content: `Exercice : ${x.n || "(sans nom)"}\nComment je le fais : ${x.alias || "(pas précisé)"}\nGroupes musculaires possibles (clé = nom) : ${keys.map(k => k + " = " + GROUPS[k]).join(", ")}.\nDonne : n = nom français clair et précis de l'exercice ; pri = 1 à 2 muscles principaux ; sec = muscles qui aident (sans répéter les principaux) ; rmin/rmax = fourchette de répétitions adaptée en sèche ; inc = plus petit palier de charge réaliste (haltères 2,5, poulie 1,25 à 2,5, machine 5, presse 10) ; mus = muscles en détail en une ligne ; why = à quoi sert l'exercice en 2 phrases ; cue = consignes de placement en 2 phrases ; tendon = true si l'exercice charge beaucoup les genoux ou les chevilles.`, schema });
+    if (X !== x) return;
+    x.n = x.n.trim() ? x.n : r.n; x.pri = r.pri.slice(0, 3); x.sec = r.sec.filter(g => !r.pri.includes(g)); x.rmin = r.rmin; x.rmax = r.rmax; x.inc = r.inc; x.mus = r.mus; x.why = r.why; x.cue = r.cue; x.tendon = r.tendon;
+  } catch (e) { if (X !== x) return; x.err = explain(e); }
+  x.busy = false; renderExEditor();
 }
 
 /* ---------- Onglet Progrès ---------- */
@@ -916,7 +995,7 @@ function openShell() { SH.opener = document.activeElement; $("app").inert = true
 function closeSheet() {
   const s = $("sheet"); s.hidden = true; s.innerHTML = "";
   if (C && C.photoUrl) URL.revokeObjectURL(C.photoUrl);
-  C = null; R = null;
+  C = null; R = null; X = null;
   $("app").inert = false; document.body.classList.remove("lock");
   if (SH.opener && document.body.contains(SH.opener)) SH.opener.focus();
 }
@@ -1320,12 +1399,14 @@ function doImport(txt) {
   } catch (e) { toast("Ce texte n'est pas une sauvegarde valide"); }
 }
 function doExport() {
+  S.profile.lastExport = today(); save();
   const txt = JSON.stringify(S, null, 1);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([txt], { type: "application/json" }));
   a.download = "carnet-de-seche-" + today() + ".json";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  if (UI.tab === "jour") render();
   try { navigator.clipboard.writeText(txt).then(() => toast("Sauvegarde téléchargée et copiée")); } catch (e) { toast("Sauvegarde téléchargée"); }
 }
 
@@ -1414,7 +1495,7 @@ document.addEventListener("click", e => {
         st.reps = +(inp.value || inp.placeholder) || ""; st.kg = kg.value === "" ? "" : +kg.value;
         const prev = bestE1RM(e2.id, UI.activeSession), cur = e1rm(st), sessBest = Math.max(0, ...e2.sets.filter(x => x !== st && x.pr).map(e1rm));
         st.pr = prev > 0 && cur > prev && cur > sessBest;
-        if (st.pr) toast("🏅 Record : " + EX[e2.id].n.split(" (")[0] + ", " + fkg(st.kg) + " kg × " + st.reps);
+        if (st.pr) toast("🏅 Record : " + XM()[e2.id].n.split(" (")[0] + ", " + fkg(st.kg) + " kg × " + st.reps);
       }
       s.u = Date.now(); save(); render(); break;
     }
@@ -1423,7 +1504,14 @@ document.addEventListener("click", e => {
     case "del-sess": if (a.dataset.confirm) { delete S.sessions[UI.activeSession]; save(); UI.activeSession = null; UI.noResume = false; render(); toast("Séance supprimée"); } else { a.dataset.confirm = "1"; a.textContent = "Confirmer"; } break;
     case "edit-prog": UI.editProgram = !UI.editProgram; render(); break;
     case "rm-ex": { const pr = JSON.parse(JSON.stringify(program())); pr[a.dataset.t].splice(+a.dataset.i, 1); S.profile.program = pr; save(); render(); break; }
-    case "mv": { const pr = JSON.parse(JSON.stringify(program())), arr = pr[a.dataset.t], i = +a.dataset.i; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; S.profile.program = pr; save(); render(); } break; }
+    case "mv": { const pr = JSON.parse(JSON.stringify(program())), arr = pr[a.dataset.t], i = +a.dataset.i, j = i + (+a.dataset.v || -1); if (j >= 0 && j < arr.length) { [arr[i], arr[j]] = [arr[j], arr[i]]; S.profile.program = pr; save(); render(); } break; }
+    case "ex-edit": openExEditor(a.dataset.id, a.dataset.t); break;
+    case "ex-new": openExEditor(null, a.dataset.t); break;
+    case "x-mus": { syncX(); const f = a.dataset.f, g = a.dataset.g, other = f === "pri" ? "sec" : "pri"; X[f] = X[f].includes(g) ? X[f].filter(x => x !== g) : [...X[f], g]; X[other] = X[other].filter(x => x !== g); renderExEditor(); break; }
+    case "x-ai": exAI(); break;
+    case "x-save": saveExEditor(); break;
+    case "x-reset": { const c = { ...(S.profile.customEx || {}) }; delete c[X.id]; S.profile.customEx = c; save(); closeSheet(); X = null; render(); toast("Exercice remis à l'original"); break; }
+    case "x-remove": if (a.dataset.confirm) { const pr = JSON.parse(JSON.stringify(program())); pr[X.tpl] = pr[X.tpl].filter(k => k !== X.id); S.profile.program = pr; save(); closeSheet(); X = null; render(); toast("Retiré de la séance"); } else { a.dataset.confirm = "1"; a.textContent = "Confirmer le retrait"; } break;
     case "goal": UI.goal = a.dataset.k; render(); break;
     case "rfilter": UI.rfilter = a.dataset.k; render(); break;
     case "ai-recipes": aiRecipes(); break;
@@ -1505,6 +1593,7 @@ document.addEventListener("change", async e => {
   if (t.dataset.flag && UI.activeSession) { S.sessions[UI.activeSession][t.dataset.flag] = t.checked; save(); return; }
   if (t.dataset.addex && t.value) { const pr = JSON.parse(JSON.stringify(program())); pr[t.dataset.addex].push(t.value); S.profile.program = pr; save(); render(); return; }
   if (t.dataset.whey) { if (t.value !== "" && +t.value >= 0) { S.profile.whey = { ...S.profile.whey, [t.dataset.whey]: +t.value }; save(); renderKeepFocus(); } return; }
+  if (t.dataset.tplname) { S.profile.tplNames = { ...(S.profile.tplNames || {}), [t.dataset.tplname]: t.value.trim() }; save(); renderKeepFocus(); return; }
   if (t.dataset.ctx) { S.profile.context = t.value.trim(); save(); toast("Enregistré"); return; }
   if (t.dataset.prof) {
     const k = t.dataset.prof;
