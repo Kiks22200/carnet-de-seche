@@ -1,5 +1,5 @@
 // Garde l'app disponible hors connexion ; les appels à l'API ne passent jamais par le cache
-const CACHE = "seche-v3";
+const CACHE = "seche-v4";
 const SHELL = ["./", "index.html", "js/app.js", "js/ai.js", "js/anatomy.js", "vendor/anthropic.mjs", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 
 self.addEventListener("install", e => {

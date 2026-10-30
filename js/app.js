@@ -1237,7 +1237,7 @@ Réponds en français, texte simple sans markdown ni titres, 150 mots maximum : 
 function openImport() {
   openShell();
   $("sheet").hidden = false;
-  $("sheet").innerHTML = sheetHTML({ title: "Importer mes données", id: "imp-title", enter: true, body: `<p class="small">Colle le texte copié depuis l'ancienne version, ou choisis un fichier exporté. Ce qui est déjà sur ce téléphone sera remplacé.</p>
+  $("sheet").innerHTML = sheetHTML({ title: "Importer mes données", id: "imp-title", enter: true, body: `<p class="small">Colle le texte copié depuis l'ancienne version, ou choisis un fichier exporté. Une sauvegarde complète remplace ce qui est sur ce téléphone ; un fichier de profil seul le complète.</p>
     <textarea id="imp-text" placeholder='{"profile": …}' style="min-height:160px;font-family:var(--f-mono);font-size:12px"></textarea>
     <label class="btn" for="imp-file">Choisir un fichier</label><input id="imp-file" type="file" accept="application/json,.json,.txt" hidden>`, foot: `<span></span><button class="btn hot" data-act="do-import">Importer</button>` });
   $("imp-text").focus();
@@ -1245,7 +1245,14 @@ function openImport() {
 function doImport(txt) {
   try {
     const j = JSON.parse(txt);
-    if (!j || !j.profile || !j.days) throw new Error();
+    if (!j || !j.profile) throw new Error();
+    if (!j.days) {
+      // Fichier de profil seul : il complète ce qui est déjà là sans effacer les repas ni les séances
+      S.profile = { ...BLANK_PROFILE, ...S.profile, ...j.profile, setup: true, v: 4 };
+      save(); closeSheet(); UI.tab = "jour"; UI.date = today(); render();
+      toast("Profil importé");
+      return;
+    }
     S = { profile: { ...BLANK_PROFILE, v: 0, ...j.profile }, days: j.days || {}, sessions: j.sessions || {} };
     migrate(); save(); closeSheet(); UI.tab = "jour"; UI.date = today(); render();
     toast(`Importé : ${Object.keys(S.days).length} jours, ${Object.keys(S.sessions).length} séances`);
