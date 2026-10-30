@@ -8,4 +8,6 @@ App web pour suivre une sèche depuis son téléphone : repas (liste, texte libr
 
 Mettre à jour le SDK embarqué : `npm install && npm run vendor`.
 
+Photos d'exercices : [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (domaine public, voir `licenses/`).
+
 Dessin anatomique adapté de [@mjcdev/react-body-highlighter](https://www.npmjs.com/package/@mjcdev/react-body-highlighter) (licence MIT, voir `licenses/`).

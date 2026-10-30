@@ -242,6 +242,10 @@ const EX = {
   ecarte_poulie: { n: "Écarté à la poulie vis-à-vis", alias: "Debout entre deux poulies", pri: ["chest"], sec: [], sugg: "Alternative au pec deck.", mus: "Grand pectoral", why: "Tension constante sur les pecs tout le long du mouvement.", cue: "Léger pas en avant, bras légèrement fléchis, rapproche les mains devant la poitrine.", rr: [12, 20], inc: 1.25 },
   barre_front: { n: "Barre au front", alias: "Couché, barre EZ vers le front", pri: ["tri"], sec: [], sugg: "Triceps, alternative à la poulie.", mus: "Triceps (toutes les portions)", why: "Charge lourde possible sur les triceps.", cue: "Coudes fixes vers le plafond, descends la barre vers le front, remonte.", rr: [8, 12], inc: 2.5 }
 };
+// Démonstrations : photos de départ et d'arrivée (free-exercise-db, domaine public), alternées en fondu
+const DEMO_KEYS = new Set(["rowing_large", "tirage_uni_assis", "rowing_haltere", "shrugs", "hyperext", "tri_corde", "tri_nuque", "dc_halteres", "pec_deck", "incline_smith", "curl_incline", "curl_marteau", "presse", "dev_militaire", "leg_ext", "elev_lat", "leg_curl", "oiseau_poulie", "tirage_vertical", "face_pull", "hip_thrust", "crunch_poulie", "rdl", "ecarte_poulie", "barre_front"]);
+function demoKey(id) { const ex = XM()[id]; if (ex && ex.demo !== undefined) return ex.demo || null; return DEMO_KEYS.has(id) ? id : null; }
+const demoHTML = (k, name) => k ? `<div class="demo" role="img" aria-label="Démonstration : ${esc(name)}, position de départ puis d'arrivée"><img src="img/ex/${k}-0.jpg" alt="" loading="lazy"><img src="img/ex/${k}-1.jpg" alt="" loading="lazy"><span class="demo-tag mono">départ → arrivée</span></div>` : "";
 // Catalogue fusionné : exercices de base + exercices créés ou modifiés dans l'appli
 function XM() {
   if (MEMO.ex) return MEMO.ex;
@@ -667,7 +671,7 @@ function viewCorps() {
   for (const t of TPLS) {
     const list = program()[t.k];
     h += `<div class="card">${UI.editProgram ? `<label class="field" for="tpl-${t.k}">Nom de la séance<input type="text" id="tpl-${t.k}" data-tplname="${t.k}" value="${esc(t.n)}"></label>` : `<b style="font-family:var(--f-display);font-size:19px">${esc(t.n)}</b>`}
-      ${list.map((exId, i) => { const ex = XM()[exId]; if (!ex) return ""; return `<div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><div style="min-width:0;flex:1;display:grid;gap:4px"><span>${esc(ex.n)}${S.profile.customEx && S.profile.customEx[exId] ? ` <span class="tag t-blue">perso</span>` : ""}</span><div class="mus">${ex.pri.map(g => `<span>${GROUPS[g]}</span>`).join("")}${ex.sec.map(g => `<span class="sec">${GROUPS[g]}</span>`).join("")}</div></div>
+      ${list.map((exId, i) => { const ex = XM()[exId]; if (!ex) return ""; const dk = demoKey(exId); return `<div class="row between" style="flex-wrap:nowrap;align-items:flex-start">${dk ? `<button class="thumb" data-act="demo" data-id="${exId}" aria-label="Voir le mouvement : ${esc(ex.n)}"><img src="img/ex/${dk}-1.jpg" alt="" loading="lazy"><span aria-hidden="true">▶</span></button>` : ""}<div style="min-width:0;flex:1;display:grid;gap:4px"><span>${esc(ex.n)}${S.profile.customEx && S.profile.customEx[exId] ? ` <span class="tag t-blue">perso</span>` : ""}</span><div class="mus">${ex.pri.map(g => `<span>${GROUPS[g]}</span>`).join("")}${ex.sec.map(g => `<span class="sec">${GROUPS[g]}</span>`).join("")}</div></div>
         <div class="row" style="gap:4px;flex-wrap:nowrap">${UI.editProgram ? `<button class="round" style="width:36px;height:36px;box-shadow:none" data-act="mv" data-t="${t.k}" data-i="${i}" data-v="-1" aria-label="Monter ${esc(ex.n)}" ${i === 0 ? "disabled" : ""}>↑</button><button class="round" style="width:36px;height:36px;box-shadow:none" data-act="mv" data-t="${t.k}" data-i="${i}" data-v="1" aria-label="Descendre ${esc(ex.n)}" ${i === list.length - 1 ? "disabled" : ""}>↓</button>` : ""}<button class="round" style="width:36px;height:36px;box-shadow:none" data-act="ex-edit" data-id="${exId}" data-t="${t.k}" aria-label="Modifier ${esc(ex.n)}">✎</button></div></div>`; }).join("")}
       ${UI.editProgram ? `<label class="field" for="add-${t.k}">Ajouter un exercice existant<select id="add-${t.k}" data-addex="${t.k}"><option value="">Choisir…</option>${Object.entries(XM()).filter(([k]) => !list.includes(k)).map(([k, e]) => `<option value="${k}">${esc(e.n)}${e.sugg ? " (suggéré)" : ""}</option>`).join("")}</select></label>
       <button class="btn small sun" data-act="ex-new" data-t="${t.k}">+ Créer un exercice</button>` : ""}</div>`;
@@ -693,6 +697,7 @@ function viewActiveSession(id) {
     h += `<article class="card">
       <div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><div style="min-width:0"><h3>${esc(ex.n)}</h3><span class="small muted"><i>${esc(ex.alias)}</i></span></div><button class="round" style="width:36px;height:36px;box-shadow:none" data-act="ex-edit" data-id="${e.id}" data-t="${s.tpl}" aria-label="Modifier ${esc(ex.n)}">✎</button></div>
       <div class="mus">${ex.pri.map(g => `<span>${GROUPS[g]}</span>`).join("")}${ex.sec.map(g => `<span class="sec">${GROUPS[g]}</span>`).join("")}</div>
+      ${demoKey(e.id) ? `<details class="learn"><summary>▶ Voir le mouvement</summary>${demoHTML(demoKey(e.id), ex.n)}</details>` : ""}
       ${s.done ? "" : `<div class="target">Objectif : <b>${t.kg !== "" ? fkg(t.kg) + " kg" : "charge à trouver"} × ${t.reps}</b><br><span class="small">${esc(t.msg)}</span>${hist[0] ? `<br><span class="small muted">Dernière fois : ${hist[0].sets.map(x => fkg(x.kg) + "×" + x.reps).join(", ")}</span>` : ""}</div>`}
       ${ex.tendon && S.profile.tendon ? `<div class="note small">Blessure : reste sous 3/10 de douleur pendant l'exercice, et celle du lendemain matin ne doit pas monter d'une semaine à l'autre. Les jambes se font avec l'accord de ton chirurgien.</div>` : ""}
       <div class="sethead mono muted" aria-hidden="true"><span>#</span><span>kg</span><span>reps</span><span></span></div>
@@ -711,12 +716,27 @@ function viewActiveSession(id) {
   return h;
 }
 
+/* ---------- Démonstration d'un exercice ---------- */
+function openDemo(id) {
+  const ex = XM()[id], k = demoKey(id);
+  if (!ex || !k) return;
+  openShell();
+  $("sheet").hidden = false;
+  $("sheet").innerHTML = sheetHTML({ title: esc(ex.n), id: "demo-title", enter: true, body: `${demoHTML(k, ex.n)}
+    ${ex.alias ? `<p class="small muted"><i>${esc(ex.alias)}</i></p>` : ""}
+    <div class="mus">${ex.pri.map(g => `<span>${GROUPS[g]}</span>`).join("")}${ex.sec.map(g => `<span class="sec">${GROUPS[g]}</span>`).join("")}</div>
+    ${ex.why ? `<p>${esc(ex.why)}</p>` : ""}${ex.cue ? `<p><b>Placement :</b> ${esc(ex.cue)}</p>` : ""}
+    <p class="small muted">La photo montre le principe du mouvement ; ta machine peut être un peu différente. Photos : free-exercise-db (domaine public).</p>`,
+    foot: `<button class="btn" data-act="ex-edit" data-id="${id}" data-t="${(TPLS.find(t => program()[t.k].includes(id)) || {}).k || ""}">✎ Modifier</button><button class="btn hot" data-act="close-sheet">Fermer</button>` });
+  $("sheet-close").focus();
+}
+
 /* ---------- Éditeur d'exercice ---------- */
 let X = null;
 function openExEditor(id, tpl) {
   const base = id ? XM()[id] : null;
   openShell();
-  X = { id, tpl, isNew: !id, n: base ? base.n : "", alias: base ? base.alias || "" : "", pri: base ? [...base.pri] : [], sec: base ? [...base.sec] : [], rmin: base ? base.rr[0] : 10, rmax: base ? base.rr[1] : 15, inc: base ? base.inc : 2.5, start: base && base.start != null ? base.start : "", mus: base ? base.mus || "" : "", why: base ? base.why || "" : "", cue: base ? base.cue || "" : "", tendon: base ? !!base.tendon : false, busy: false, err: "", fresh: true };
+  X = { id, tpl, isNew: !id, n: base ? base.n : "", alias: base ? base.alias || "" : "", pri: base ? [...base.pri] : [], sec: base ? [...base.sec] : [], rmin: base ? base.rr[0] : 10, rmax: base ? base.rr[1] : 15, inc: base ? base.inc : 2.5, start: base && base.start != null ? base.start : "", mus: base ? base.mus || "" : "", why: base ? base.why || "" : "", cue: base ? base.cue || "" : "", tendon: base ? !!base.tendon : false, demo: id ? demoKey(id) || "" : "", busy: false, err: "", fresh: true };
   renderExEditor();
 }
 function syncX() {
@@ -724,12 +744,15 @@ function syncX() {
   if (!$("x-n")) return;
   X.n = v("x-n"); X.alias = v("x-alias"); X.rmin = +v("x-rmin") || X.rmin; X.rmax = +v("x-rmax") || X.rmax; X.inc = +String(v("x-inc")).replace(",", ".") || X.inc;
   const st = String(v("x-start")).replace(",", "."); X.start = st === "" ? "" : +st; X.mus = v("x-mus"); X.why = v("x-why"); X.cue = v("x-cue");
+  if ($("x-demo")) X.demo = v("x-demo");
 }
 function renderExEditor() {
   const chips = (field) => `<div class="row" style="gap:6px">${Object.entries(GROUPS).map(([g, n]) => `<button class="chip" data-act="x-mus" data-f="${field}" data-g="${g}" aria-pressed="${X[field].includes(g)}">${n}</button>`).join("")}</div>`;
   const isBase = X.id && EX[X.id], isCustom = X.id && S.profile.customEx && S.profile.customEx[X.id];
   const body = `<label class="field" for="x-n">Nom de l'exercice<input type="text" id="x-n" value="${esc(X.n)}" placeholder="Ex. : Tirage vertical unilatéral"></label>
     <label class="field" for="x-alias">Comment tu le fais<textarea id="x-alias" placeholder="Ex. : assis par terre, poulie tout en haut, je ramène le coude près du corps">${esc(X.alias)}</textarea></label>
+    <label class="field" for="x-demo">Démonstration animée<select id="x-demo"><option value="">Aucune</option>${[...DEMO_KEYS].map(k => `<option value="${k}" ${X.demo === k ? "selected" : ""}>${esc(EX[k].n)}</option>`).join("")}</select></label>
+    ${demoHTML(X.demo, X.n)}
     <button class="btn hot" data-act="x-ai" ${X.busy ? "disabled" : ""}>${X.busy ? `<span class="spin"></span> Claude analyse…` : "✨ Compléter avec Claude"}</button>
     ${X.err ? `<div class="note">${esc(X.err)}</div>` : `<p class="small muted">Claude déduit les muscles, la fourchette de répétitions et les consignes à partir de ta description. Tu peux tout corriger ensuite.</p>`}
     <div><b>Muscles principaux</b>${chips("pri")}</div>
@@ -753,6 +776,7 @@ function saveExEditor() {
   const rmin = clamp(Math.round(X.rmin), 1, 50), rmax = clamp(Math.round(X.rmax), rmin, 60);
   const data = { n: X.n.trim(), alias: X.alias.trim(), pri: X.pri, sec: X.sec.filter(g => !X.pri.includes(g)), rr: [rmin, rmax], inc: X.inc > 0 ? X.inc : 2.5, mus: X.mus.trim() || X.pri.map(g => GROUPS[g]).join(", "), why: X.why.trim(), cue: X.cue.trim(), tendon: X.tendon };
   if (X.start !== "" && X.start > 0) data.start = X.start;
+  data.demo = X.demo || "";
   const id = X.id || "c_" + uid();
   S.profile.customEx = { ...(S.profile.customEx || {}), [id]: data };
   if (X.isNew && X.tpl) { const pr = JSON.parse(JSON.stringify(program())); pr[X.tpl].push(id); S.profile.program = pr; }
@@ -970,7 +994,7 @@ function viewPlan() {
   h += healthHelpHTML();
   h += `<section class="card"><h3>Tes données</h3><p class="small muted">Tout est sur ce téléphone. Exporte régulièrement une sauvegarde.</p>
     <div class="row"><button class="btn" data-act="export">Exporter</button><button class="btn" data-act="import">Importer</button></div>
-    <p class="small muted">Dessin anatomique adapté de react-body-highlighter (licence MIT).</p></section>`;
+    <p class="small muted">Dessin anatomique adapté de react-body-highlighter (licence MIT). Photos d'exercices : free-exercise-db (domaine public).</p></section>`;
   return h;
 }
 function guideHTML() {
@@ -1001,7 +1025,7 @@ function closeSheet() {
 }
 function sheetHTML({ title, head = "", body, foot, enter, id = "sheet-title" }) {
   return `<div class="back" data-act="sheet-back"><div class="sheet ${enter ? "enter" : ""}" role="dialog" aria-modal="true" aria-labelledby="${id}">
-    <div class="sh-head"><div class="row between"><h3 id="${id}">${title}</h3><button class="round" id="sheet-close" data-act="close-sheet" aria-label="Fermer">✕</button></div>${head}</div>
+    <div class="sh-head"><div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><h3 id="${id}" style="min-width:0">${title}</h3><button class="round" id="sheet-close" data-act="close-sheet" aria-label="Fermer">✕</button></div>${head}</div>
     <div class="sh-body">${body}</div>${foot ? `<div class="sh-foot">${foot}</div>` : ""}</div></div>`;
 }
 
@@ -1257,7 +1281,8 @@ function openVoice() {
 function voiceHint(t) { const h = $("v-hint"); if (h) h.textContent = t; }
 function startRec() {
   const ta = $("voice-text"), L = $("listen");
-  const rec = new SR();
+  let rec;
+  try { rec = new SR(); } catch (e) { REC.useSR = false; voiceHint("Touche le 🎤 de ton clavier et parle"); ta.focus(); return; }
   rec.lang = "fr-FR"; rec.interimResults = true; rec.continuous = true;
   const base = ta.value.trim() ? ta.value.trim() + " " : "";
   let fin = "", heard = false;
@@ -1527,7 +1552,8 @@ document.addEventListener("click", e => {
     case "edit-prog": UI.editProgram = !UI.editProgram; render(); break;
     case "rm-ex": { const pr = JSON.parse(JSON.stringify(program())); pr[a.dataset.t].splice(+a.dataset.i, 1); S.profile.program = pr; save(); render(); break; }
     case "mv": { const pr = JSON.parse(JSON.stringify(program())), arr = pr[a.dataset.t], i = +a.dataset.i, j = i + (+a.dataset.v || -1); if (j >= 0 && j < arr.length) { [arr[i], arr[j]] = [arr[j], arr[i]]; S.profile.program = pr; save(); render(); } break; }
-    case "ex-edit": openExEditor(a.dataset.id, a.dataset.t); break;
+    case "ex-edit": if (!$("sheet").hidden) closeSheet(); openExEditor(a.dataset.id, a.dataset.t || null); break;
+    case "demo": openDemo(a.dataset.id); break;
     case "ex-new": openExEditor(null, a.dataset.t); break;
     case "x-mus": { syncX(); const f = a.dataset.f, g = a.dataset.g, other = f === "pri" ? "sec" : "pri"; X[f] = X[f].includes(g) ? X[f].filter(x => x !== g) : [...X[f], g]; X[other] = X[other].filter(x => x !== g); renderExEditor(); break; }
     case "x-ai": exAI(); break;
@@ -1615,6 +1641,7 @@ document.addEventListener("change", async e => {
   if (t.dataset.flag && UI.activeSession) { S.sessions[UI.activeSession][t.dataset.flag] = t.checked; save(); return; }
   if (t.dataset.addex && t.value) { const pr = JSON.parse(JSON.stringify(program())); pr[t.dataset.addex].push(t.value); S.profile.program = pr; save(); render(); return; }
   if (t.dataset.whey) { if (t.value !== "" && +t.value >= 0) { S.profile.whey = { ...S.profile.whey, [t.dataset.whey]: +t.value }; save(); renderKeepFocus(); } return; }
+  if (t.id === "x-demo" && X) { syncX(); renderExEditor(); return; }
   if (t.dataset.tplname) { S.profile.tplNames = { ...(S.profile.tplNames || {}), [t.dataset.tplname]: t.value.trim() }; save(); renderKeepFocus(); return; }
   if (t.dataset.ctx) { S.profile.context = t.value.trim(); save(); toast("Enregistré"); return; }
   if (t.dataset.prof) {
