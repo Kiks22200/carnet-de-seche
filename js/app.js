@@ -1234,40 +1234,62 @@ function saveReview() {
 
 /* ---------- Vocal ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const STANDALONE = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
 let REC = null;
+// Sur iPhone, une appli installée n'a souvent pas accès à la reconnaissance vocale du navigateur : on passe alors par la dictée du clavier
 function openVoice() {
   const L = $("listen");
   L.hidden = false; L.className = "listen";
   document.body.classList.add("lock");
-  let finalText = "";
-  const paint = (said, on, fallback) => {
-    L.className = "listen" + (on ? " on" : "");
-    L.innerHTML = `<div class="mid"><span class="mono">${fallback ? "Dicte avec le micro de ton clavier" : on ? "Je t'écoute" : "Touche le micro pour parler"}</span>
-      <button class="orb" data-act="voice-toggle" aria-label="${on ? "Arrêter" : "Parler"}">${ICON_MIC}</button>
-      ${fallback ? `<textarea id="voice-text" placeholder="Ex. : ce midi, une grosse assiette de pâtes avec un steak, et 20 minutes de marche"></textarea>` : `<p class="said" aria-live="polite">${esc(said) || "« Ce midi, pâtes sauce soja et un steak au beurre, et j'ai marché 20 minutes »"}</p>`}</div>
-      <div class="acts"><button class="btn" data-act="voice-cancel">Annuler</button><button class="btn ink" data-act="voice-done">Analyser</button></div>`;
-  };
-  if (!SR) { paint("", false, true); setTimeout(() => { const t = $("voice-text"); if (t) t.focus(); }, 50); REC = { fallback: true }; return; }
+  const useSR = !!SR && !(IOS && STANDALONE);
+  REC = { rec: null, on: false, useSR };
+  L.innerHTML = `<div class="mid">
+      <span class="mono" id="v-hint">${useSR ? "Je t'écoute…" : "Touche le 🎤 de ton clavier et parle"}</span>
+      ${useSR ? `<button class="orb" data-act="voice-toggle" aria-label="Arrêter ou reprendre l'écoute">${ICON_MIC}</button>` : ""}
+      <label class="sr" for="voice-text">Ce que tu as mangé ou fait</label>
+      <textarea id="voice-text" class="said-box" placeholder="Ex. : ce soir, filet mignon au beurre avec deux coings poêlés"></textarea>
+      <span class="small">Tu peux corriger le texte avant d'analyser.</span>
+    </div>
+    <div class="acts"><button class="btn" data-act="voice-cancel">Annuler</button><button class="btn ink" data-act="voice-done">Analyser</button></div>`;
+  if (useSR) startRec(); else setTimeout(() => { const t = $("voice-text"); if (t) t.focus(); }, 60);
+}
+function voiceHint(t) { const h = $("v-hint"); if (h) h.textContent = t; }
+function startRec() {
+  const ta = $("voice-text"), L = $("listen");
   const rec = new SR();
   rec.lang = "fr-FR"; rec.interimResults = true; rec.continuous = true;
-  REC = { rec, text: "", on: false };
+  const base = ta.value.trim() ? ta.value.trim() + " " : "";
+  let fin = "", heard = false;
   rec.onresult = ev => {
     let interim = "";
-    for (let i = ev.resultIndex; i < ev.results.length; i++) { const r = ev.results[i]; if (r.isFinal) finalText += r[0].transcript + " "; else interim += r[0].transcript; }
-    REC.text = (finalText + interim).trim();
-    const p = L.querySelector(".said"); if (p) p.textContent = REC.text;
+    for (let i = ev.resultIndex; i < ev.results.length; i++) { const r = ev.results[i]; if (r.isFinal) fin += r[0].transcript + " "; else interim += r[0].transcript; }
+    heard = true;
+    ta.value = (base + fin + interim).trim();
   };
-  rec.onerror = ev => { if (ev.error === "not-allowed" || ev.error === "service-not-allowed") { REC = { fallback: true }; paint("", false, true); toast("Micro refusé : autorise-le dans les réglages du navigateur, ou dicte au clavier"); } };
-  rec.onend = () => { if (REC && REC.rec === rec) { REC.on = false; paint(REC.text, false); } };
-  paint("", true);
-  try { rec.start(); REC.on = true; } catch (e) { paint("", false); }
+  rec.onerror = ev => {
+    voiceHint(ev.error === "not-allowed" || ev.error === "service-not-allowed" ? "Micro refusé ici : touche le 🎤 de ton clavier et parle" : ev.error === "no-speech" ? "Je n'ai rien entendu : touche le micro rouge pour réessayer" : "Le micro a coupé : touche le micro rouge, ou dicte au clavier");
+    if (ev.error === "not-allowed" || ev.error === "service-not-allowed") ta.focus();
+  };
+  rec.onend = () => {
+    if (!REC || REC.rec !== rec) return;
+    REC.on = false; L.className = "listen";
+    if (heard && ta.value.trim()) voiceHint("Vérifie le texte, puis touche Analyser");
+    else if ($("v-hint").textContent === "Je t'écoute…") voiceHint("Touche le micro rouge pour parler, ou dicte au clavier");
+  };
+  REC.rec = rec;
+  try { rec.start(); REC.on = true; L.className = "listen on"; voiceHint("Je t'écoute…"); }
+  catch (e) { voiceHint("Touche le 🎤 de ton clavier et parle"); ta.focus(); }
 }
-function closeVoice() { if (REC && REC.rec) { REC.rec.onend = null; try { REC.rec.abort(); } catch (e) {} } REC = null; $("listen").hidden = true; $("listen").innerHTML = ""; if ($("sheet").hidden) document.body.classList.remove("lock"); }
+function closeVoice() {
+  if (REC && REC.rec) { REC.rec.onend = null; REC.rec.onerror = null; try { REC.rec.abort(); } catch (e) {} }
+  REC = null; $("listen").hidden = true; $("listen").innerHTML = "";
+  if ($("sheet").hidden) document.body.classList.remove("lock");
+}
 function voiceDone() {
-  let text = REC && REC.fallback ? ($("voice-text") || {}).value || "" : (REC && REC.text) || "";
-  text = text.trim();
+  const text = (($("voice-text") || {}).value || "").trim();
+  if (!text) { voiceHint("Rien à analyser : parle ou écris d'abord"); return; }
   closeVoice();
-  if (!text) { toast("Je n'ai rien entendu"); return; }
   runAnalysis(text, null);
 }
 
@@ -1450,7 +1472,7 @@ document.addEventListener("click", e => {
     case "go-weigh": goTab("progres"); setTimeout(() => { const el = $("weighin-input"); if (el) el.focus(); }, 50); break;
     case "go-coach": goTab("plan"); setTimeout(() => { const el = $("bilan"); if (el) el.scrollIntoView({ behavior: "smooth" }); coach(); }, 50); break;
     case "voice": openVoice(); break;
-    case "voice-toggle": if (REC && REC.rec) { if (REC.on) { try { REC.rec.stop(); } catch (err) {} } else { try { REC.rec.start(); REC.on = true; $("listen").className = "listen on"; } catch (err) {} } } break;
+    case "voice-toggle": if (REC && REC.useSR) { if (REC.on && REC.rec) { try { REC.rec.stop(); } catch (err) {} } else startRec(); } break;
     case "voice-cancel": closeVoice(); break;
     case "voice-done": voiceDone(); break;
     case "add-meal": openComposer({ slot: a.dataset.slot }); break;
