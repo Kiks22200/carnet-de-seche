@@ -466,7 +466,8 @@ function viewJour() {
     <div class="blk b-cobalt"><span class="mono">Protéines</span><div class="big" style="font-size:40px">${f0(tot.prot)}<span style="font-size:18px"> / ${p.prot} g</span></div><div class="meter"><i style="width:${Math.min(100, tot.prot / p.prot * 100)}%"></i></div></div>
     <div class="blk b-sun"><span class="mono">Marche, vélo</span><div class="big" style="font-size:40px">${walk}<span style="font-size:18px"> / ${wg} min</span></div>
       <div class="stepper" style="justify-self:start"><button data-act="walk" data-v="-5" aria-label="Moins 5 minutes">−</button><span class="v">${walk}′</span><button data-act="walk" data-v="5" aria-label="Plus 5 minutes">+</button></div></div>
-  </section>`;
+  </section>
+  <section class="card" style="gap:8px"><div class="row between"><div style="min-width:0;flex:1"><b>⌚ Apple Santé</b><div class="small muted">${D.steps != null ? `${f0(D.steps)} pas${D.activeKcal ? " · " + f0(D.activeKcal) + " kcal actives (pour info)" : ""}` : "Lance ton raccourci, puis touche Importer."}</div></div><button class="btn small" data-act="health-paste">Importer</button></div></section>`;
 
   h += `<section>
     <form class="quick" id="quick-form" autocomplete="off">
@@ -545,7 +546,7 @@ function viewJournal() {
     return `<button class="card dcard" data-act="openday" data-d="${d}">
       <div class="row between"><b style="font-family:var(--f-display);font-size:20px">${cap(JOURS_L[parseD(d).getDay()])} ${parseD(d).getDate()}</b><span class="tag t-${dayLight(t.kcal)}">${f0(t.kcal)} kcal</span></div>
       <div class="emrow" aria-hidden="true">${D.meals.flatMap(mm => mm.items).map(emojiFor).slice(0, 10).join("") || "💪"}</div>
-      <span class="small muted">${f0(t.prot)} g prot.${s ? " · " + TPLS.find(x => x.k === s.tpl).n : ""}${D.walk ? " · " + D.walk + " min de marche" : ""}${D.kg ? " · " + f1(D.kg) + " kg" : ""}</span>
+      <span class="small muted">${f0(t.prot)} g prot.${s ? " · " + TPLS.find(x => x.k === s.tpl).n : ""}${D.walk ? " · " + D.walk + " min de marche" : ""}${D.steps ? " · " + f0(D.steps) + " pas" : ""}${D.kg ? " · " + f1(D.kg) + " kg" : ""}</span>
     </button>`;
   }).join("") : `<div class="empty">Chaque jour où tu notes un repas apparaîtra ici, avec sa couleur, ce que tu as mangé et ta séance.</div>`}</section>`;
   return h;
@@ -887,6 +888,7 @@ function viewPlan() {
       <button class="btn ink" data-act="coach" ${UI.coachBusy ? "disabled" : ""}>${UI.coachBusy ? `<span class="spin"></span> Analyse…` : "Faire le bilan"}</button>
       <div id="coach-out" style="white-space:pre-wrap;font-size:15px">${esc(UI.coach)}</div></section>`;
   h += guideHTML();
+  h += healthHelpHTML();
   h += `<section class="card"><h3>Tes données</h3><p class="small muted">Tout est sur ce téléphone. Exporte régulièrement une sauvegarde.</p>
     <div class="row"><button class="btn" data-act="export">Exporter</button><button class="btn" data-act="import">Importer</button></div>
     <p class="small muted">Dessin anatomique adapté de react-body-highlighter (licence MIT).</p></section>`;
@@ -1233,6 +1235,65 @@ Réponds en français, texte simple sans markdown ni titres, 150 mots maximum : 
   UI.coachBusy = false; render();
 }
 
+/* ---------- Apple Santé (via un raccourci iOS) ---------- */
+const SITE = location.origin + location.pathname;
+const num = v => { if (v == null) return null; const n = parseFloat(String(v).replace(/[^\d,.-]/g, "").replace(",", ".")); return isFinite(n) ? n : null; };
+function parseHealth(text) {
+  if (!text) return null;
+  let t = String(text);
+  try { t = decodeURIComponent(t); } catch (e) {}
+  const i = t.indexOf("sante?");
+  if (i >= 0) t = t.slice(i + 6);
+  const q = {};
+  t.split("&").forEach(kv => { const j = kv.indexOf("="); if (j > 0) q[kv.slice(0, j).trim().toLowerCase()] = kv.slice(j + 1); });
+  const o = { pas: num(q.pas), ex: num(q.exercice != null ? q.exercice : q.marche), actif: num(q.actif), poids: num(q.poids), date: (q.date || "").trim() };
+  return o.pas == null && o.ex == null && o.actif == null && o.poids == null ? null : o;
+}
+function applyHealth(o) {
+  const d = o.date && /^\d{4}-\d{2}-\d{2}$/.test(o.date) && o.date <= today() ? o.date : today();
+  if (!S.days[d]) S.days[d] = day(d);
+  const D = S.days[d], done = [];
+  if (o.pas != null) { D.steps = Math.round(o.pas); done.push(f0(D.steps) + " pas"); }
+  if (o.ex != null) { D.walk = Math.max(D.walk || 0, Math.round(o.ex)); done.push(Math.round(o.ex) + " min"); }
+  if (o.actif != null) { D.activeKcal = Math.round(o.actif); done.push(f0(D.activeKcal) + " kcal actives"); }
+  if (o.poids != null && o.poids > 30 && o.poids < 300) { D.kg = Math.round(o.poids * 10) / 10; done.push(f1(D.kg) + " kg"); }
+  saveDay(d); UI.date = d; UI.tab = "jour"; render();
+  toast("⌚ Santé : " + done.join(", "));
+}
+function checkHealthHash() {
+  if (!location.hash.startsWith("#sante")) return;
+  const o = parseHealth(location.hash);
+  history.replaceState(null, "", location.pathname);
+  if (o && S.profile.setup) applyHealth(o);
+}
+async function healthPaste() {
+  let txt = "";
+  try { txt = await navigator.clipboard.readText(); } catch (e) {}
+  const o = parseHealth(txt);
+  if (o) { applyHealth(o); return; }
+  openShell();
+  $("sheet").hidden = false;
+  $("sheet").innerHTML = sheetHTML({ title: "Importer d'Apple Santé", id: "hp-title", enter: true, body: `<p class="small">Lance ton raccourci « Santé vers Sèche », puis colle ici ce qu'il a copié.</p><textarea id="hp-text" placeholder="pas=8123&exercice=34&actif=520&poids=91.2"></textarea>`, foot: `<span></span><button class="btn hot" data-act="health-apply">Importer</button>` });
+  $("hp-text").focus();
+}
+function healthHelpHTML() {
+  const url = SITE + "#sante?pas=[Pas]&exercice=[Minutes]&actif=[Énergie]&poids=[Poids]";
+  return `<section class="card"><h3>⌚ Apple Santé</h3>
+    <p class="small">Un raccourci iPhone lit tes pas, tes minutes d'exercice, tes calories actives et ta pesée dans Santé, puis les envoie ici. À créer une seule fois dans l'app <b>Raccourcis</b> :</p>
+    <ol class="rlist">
+      <li>Nouveau raccourci, nomme-le « Santé vers Sèche ».</li>
+      <li>Action <b>Rechercher des échantillons de santé</b> : type <i>Pas</i>, date de début <i>aujourd'hui</i>. Puis <b>Calculer les statistiques</b> → <i>Somme</i>. Renomme le résultat « Pas ».</li>
+      <li>Pareil avec le type <i>Minutes d'exercice</i> (résultat « Minutes ») et <i>Énergie active</i> (résultat « Énergie »).</li>
+      <li><b>Rechercher des échantillons de santé</b> : type <i>Poids</i>, date de début <i>aujourd'hui</i>, limite <i>1</i>. Renomme-le « Poids » (vide si tu ne t'es pas pesé).</li>
+      <li>Action <b>Texte</b> avec l'adresse ci-dessous, en remplaçant chaque mot entre crochets par la variable du même nom.</li>
+      <li>Action <b>Copier dans le presse-papiers</b>.</li>
+      <li>Dans l'appli, touche <b>⌚ Importer</b> sur l'écran du jour.</li>
+    </ol>
+    <div class="calc"><div class="eq" style="word-break:break-all">${esc(url)}</div></div>
+    <button class="btn small" data-act="copy-health-url">Copier l'adresse</button>
+    <p class="small muted">Si tu utilises l'appli dans Safari plutôt qu'installée, remplace l'étape 6 par <b>Ouvrir les URL</b> : l'import se fait tout seul. Les calories actives sont affichées pour info mais ne s'ajoutent pas à ton budget : la montre les surestime souvent, et ta cible tient déjà compte de ton activité.</p></section>`;
+}
+
 /* ---------- Import / export ---------- */
 function openImport() {
   openShell();
@@ -1377,6 +1438,9 @@ document.addEventListener("click", e => {
     case "model": setModel(a.dataset.v); render(); break;
     case "coach": coach(); break;
     case "export": doExport(); break;
+    case "health-paste": healthPaste(); break;
+    case "health-apply": { const o = parseHealth($("hp-text").value); if (!o) { toast("Je ne trouve pas de données Santé dans ce texte"); break; } closeSheet(); applyHealth(o); break; }
+    case "copy-health-url": { const u = SITE + "#sante?pas=[Pas]&exercice=[Minutes]&actif=[Énergie]&poids=[Poids]"; try { navigator.clipboard.writeText(u).then(() => toast("Adresse copiée"), () => toast("Sélectionne l'adresse pour la copier")); } catch (e) { toast("Sélectionne l'adresse pour la copier"); } break; }
     case "import": openImport(); break;
     case "do-import": doImport($("imp-text").value); break;
   }
@@ -1476,5 +1540,7 @@ window.addEventListener("resize", () => { clearTimeout(resizeTm); resizeTm = set
 loadLocal();
 migrate();
 render();
+checkHealthHash();
+window.addEventListener("hashchange", checkHealthHash);
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
