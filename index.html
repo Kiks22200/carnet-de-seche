@@ -65,7 +65,12 @@ button { cursor: pointer; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .wrap { max-width: 560px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
 h1, h2, h3 { font-family: var(--f-display); margin: 0; letter-spacing: -.01em; text-wrap: balance; }
-h1 { font-size: 34px; font-weight: 800; line-height: 1; }
+h1 { font-size: clamp(24px, 7.4vw, 34px); font-weight: 800; line-height: 1; white-space: nowrap; }
+.top .when { min-width: 0; }
+.top .when .mono { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blk .seg { background: #fff; }
+.blk .seg button { color: var(--block-ink); }
+.blk .seg button[aria-pressed="true"] { background: var(--block-ink); color: #fff; }
 h2 { font-size: 28px; font-weight: 800; line-height: 1.05; }
 h3 { font-size: 21px; font-weight: 700; line-height: 1.15; }
 p { margin: 0; }
@@ -194,7 +199,7 @@ label.field { display: grid; gap: 5px; font-size: 13px; font-weight: 700; }
 .mu { cursor: pointer; }
 .mu path { transition: fill .35s; }
 .mu:focus { outline: none; }
-.mu:focus-visible path, .mu.sel path { stroke: #FFFFFF; stroke-width: 6; }
+.mu:focus-visible path:nth-child(3n+1), .mu.sel path:nth-child(3n+1) { stroke: #FFFFFF; stroke-width: 6; }
 .heat { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; font-family: var(--f-mono); font-size: 10px; color: #A79FBC; }
 .heat span { display: inline-flex; align-items: center; gap: 4px; }
 .heat i { width: 14px; height: 10px; border-radius: 3px; display: inline-block; border: 1px solid #000; }
@@ -221,6 +226,10 @@ details.learn summary { cursor: pointer; font-weight: 700; color: var(--cobalt);
 details.learn summary::-webkit-details-marker { display: none; }
 .learn p { font-size: 15px; margin-top: 6px; }
 .hist { font-size: 13px; color: var(--muted); display: grid; gap: 2px; font-variant-numeric: tabular-nums; margin-top: 6px; }
+
+/* Recettes */
+.big-emo { width: 54px; height: 54px; font-size: 30px; border-radius: 16px; flex: none; }
+.rlist { margin: 4px 0 8px; padding-left: 20px; display: grid; gap: 3px; font-size: 15px; }
 
 /* Progrès */
 .chart { width: 100%; height: auto; display: block; }
@@ -293,7 +302,7 @@ tr:last-child td { border-bottom: 0; }
   <header class="top" id="top" hidden>
     <div class="wrap">
       <div class="when" id="when"></div>
-      <div class="actions"><span class="kgchip" id="kgchip"></span><button class="round" data-act="go" data-tab="plan" aria-label="Réglages et plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></button></div>
+      <div class="actions"><span class="kgchip" id="kgchip"></span><button class="round" data-act="go" data-tab="recettes" aria-label="Idées de recettes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 21h10M8 17h8v4H8zM6 10a4 4 0 0 1 2.4-6.6A4 4 0 0 1 16 4a4 4 0 0 1 2 7.6V17H6z"/></svg></button><button class="round" data-act="go" data-tab="plan" aria-label="Réglages et plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg></button></div>
     </div>
   </header>
   <main class="wrap" id="view"></main>

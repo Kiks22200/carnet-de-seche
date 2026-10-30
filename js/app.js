@@ -112,6 +112,7 @@ const FOODS = [
   { k: "ketchup", c: "ext", e: "🍅", n: "Ketchup", u: "u", kc: 20, pr: 0, un: "c. à soupe", kw: ["ketchup"] },
   { k: "creme", c: "ext", e: "🥛", n: "Crème fraîche", u: "u", kc: 60, pr: 0.5, un: "c. à soupe", kw: ["creme fraiche"] },
   { k: "sauce", c: "ext", e: "🫗", n: "Sauce (poivre, béarnaise…)", u: "u", kc: 120, pr: 1, un: "portion", kw: ["sauce"] },
+  { k: "cancoillotte", c: "ext", e: "🧀", n: "Cancoillotte", u: "u", kc: 40, pr: 4.5, un: "c. à soupe (30 g)", kw: ["cancoillotte"] },
   { k: "fromage", c: "ext", e: "🧀", n: "Fromage (camembert, comté…)", u: "u", kc: 110, pr: 7, un: "part (30 g)", kw: ["fromage", "camembert", "comte"] },
 
   { k: "soda", c: "boi", e: "🥤", n: "Soda", u: "u", kc: 140, pr: 0, un: "canette 33 cl", kw: ["coca", "soda", "fanta", "ice tea"] },
@@ -150,6 +151,34 @@ const PRESETS = [
   { e: "🥛", n: "Skyr + banane", items: [{ k: "skyr", cnt: 1 }, { k: "banane", cnt: 1 }] }
 ];
 const emojiFor = it => it.e || (FOOD[OLD_KEYS[it.k] || it.k] || {}).e || "🍽️";
+
+/* ---------- Recettes ---------- */
+const GOALS = [["seche", "Sèche"], ["equilibre", "Équilibre"], ["masse", "Prise de masse"]];
+const RECIPES = [
+  { id: "bowl_poulet", e: "🍗", n: "Bowl poulet, riz et haricots verts", g: ["seche", "equilibre"], kcal: 500, prot: 53, min: 15, how: "Micro-ondes", ingr: ["150 g de poulet cuit (ou 2 filets à l'air fryer)", "150 g de riz cuit (sachet express)", "150 g de haricots verts surgelés", "1 c. à soupe de sauce soja"], steps: ["Fais cuire les haricots 5 min au micro-ondes et réchauffe le riz.", "Coupe le poulet en morceaux et dispose tout dans un bol.", "Arrose de sauce soja, ajoute du poivre ou du piment."] },
+  { id: "skyr_bowl", e: "🥣", n: "Skyr bowl fruits rouges et avoine", g: ["seche", "equilibre"], kcal: 365, prot: 35, min: 3, how: "Sans cuisson", ingr: ["300 g de skyr nature", "100 g de fruits rouges (surgelés, c'est parfait)", "30 g de flocons d'avoine", "1 c. à café de miel"], steps: ["Verse le skyr dans un bol.", "Ajoute les fruits, l'avoine et le miel."] },
+  { id: "wrap_thon", e: "🌯", n: "Wrap thon et fromage blanc", g: ["seche", "equilibre"], kcal: 340, prot: 35, min: 5, how: "Sans cuisson", ingr: ["1 grande tortilla complète", "1 boîte de thon au naturel (100 g égoutté)", "2 c. à soupe de fromage blanc 0 %", "Salade, tomate, concombre", "Citron, poivre"], steps: ["Mélange le thon, le fromage blanc, le citron et le poivre.", "Étale sur la tortilla avec les crudités et roule serré."] },
+  { id: "omelette", e: "🍳", n: "Omelette 3 œufs aux légumes", g: ["seche", "equilibre"], kcal: 415, prot: 27, min: 10, how: "Poêle", ingr: ["3 œufs", "150 g de légumes (poivrons, champignons, épinards, surgelés OK)", "1 c. à café d'huile", "1 tranche de pain complet (40 g)"], steps: ["Fais revenir les légumes 4 min dans l'huile.", "Verse les œufs battus, salés et poivrés, et laisse prendre à feu moyen.", "Plie l'omelette et sers avec le pain."] },
+  { id: "saumon_af", e: "🐟", n: "Saumon, patates et brocoli à l'air fryer", g: ["seche", "equilibre"], kcal: 520, prot: 37, min: 20, how: "Air fryer", ingr: ["1 pavé de saumon (130 g)", "200 g de pommes de terre en cubes", "150 g de brocoli", "1 c. à café d'huile, sel, paprika"], steps: ["Mélange les patates avec l'huile et le paprika : 12 min à 200 °C.", "Ajoute le saumon et le brocoli : encore 8 min.", "Un filet de citron avant de servir."] },
+  { id: "papillote", e: "🐠", n: "Cabillaud en papillote, semoule et courgette", g: ["seche"], kcal: 410, prot: 39, min: 12, how: "Micro-ondes", ingr: ["1 dos de cabillaud (170 g)", "1 courgette en rondelles", "50 g de semoule crue", "1 c. à café d'huile d'olive, citron, herbes"], steps: ["Mets le poisson et la courgette dans un plat fermé avec le citron, les herbes et l'huile.", "6 à 7 min au micro-ondes à pleine puissance.", "Pendant ce temps, verse 60 ml d'eau bouillante sur la semoule et couvre 5 min."] },
+  { id: "chili", e: "🌶️", n: "Chili con carne léger", g: ["seche", "equilibre"], kcal: 430, prot: 38, min: 25, how: "Poêle", ingr: ["125 g de bœuf haché 5 %", "100 g de haricots rouges en boîte", "150 g de tomates concassées", "100 g de riz cuit", "Oignon, cumin, paprika"], steps: ["Fais dorer la viande avec l'oignon, sans matière grasse.", "Ajoute les tomates, les haricots égouttés et les épices : 15 min à feu doux.", "Sers sur le riz."] },
+  { id: "salade_pc", e: "🥗", n: "Salade poulet et pois chiches", g: ["seche", "equilibre"], kcal: 450, prot: 47, min: 10, how: "Sans cuisson", ingr: ["120 g de poulet cuit", "100 g de pois chiches en boîte, rincés", "Salade, tomates cerises, concombre", "1 c. à soupe de vinaigrette"], steps: ["Rince les pois chiches.", "Mélange tout et assaisonne au dernier moment."] },
+  { id: "steak_pd", e: "🍠", n: "Steak haché, patate douce et haricots", g: ["seche", "equilibre"], kcal: 355, prot: 27, min: 15, how: "Micro-ondes", ingr: ["1 steak haché 5 %", "1 patate douce (200 g)", "150 g de haricots verts"], steps: ["Pique la patate douce et passe-la 8 min au micro-ondes.", "Cuis le steak à sec dans une poêle antiadhésive.", "Sers avec les haricots."] },
+  { id: "cancoillotte", e: "🧀", n: "Pommes de terre, cancoillotte et jambon", g: ["seche", "equilibre"], kcal: 390, prot: 31, min: 12, how: "Micro-ondes", ingr: ["250 g de pommes de terre", "60 g de cancoillotte (2 c. à soupe)", "2 tranches de jambon blanc", "Salade verte"], steps: ["Cuis les pommes de terre 8 min au micro-ondes dans un plat couvert avec un fond d'eau.", "Fais tiédir la cancoillotte 20 s et nappe les patates.", "Sers avec le jambon et la salade."] },
+  { id: "fb_pomme", e: "🍎", n: "Fromage blanc, pomme et cannelle", g: ["seche"], kcal: 195, prot: 19, min: 3, how: "Sans cuisson", ingr: ["250 g de fromage blanc 0 %", "1 pomme en dés", "Cannelle"], steps: ["Mélange et saupoudre de cannelle. Parfait contre l'envie de sucré."] },
+  { id: "oats", e: "🥛", n: "Overnight oats protéinés", g: ["seche", "equilibre", "masse"], kcal: 400, prot: 27, min: 5, how: "Sans cuisson", ingr: ["50 g de flocons d'avoine", "150 g de skyr", "150 ml de lait demi-écrémé", "½ banane"], steps: ["Mélange tout dans un bocal le soir.", "Laisse au frigo pour la nuit : c'est prêt au réveil."] },
+  { id: "bolo", e: "🍝", n: "Pâtes complètes bolognaise maison", g: ["equilibre", "masse"], kcal: 555, prot: 38, min: 20, how: "Poêle", ingr: ["100 g de pâtes complètes crues", "100 g de bœuf haché 5 %", "100 g de sauce tomate", "10 g de parmesan"], steps: ["Cuis les pâtes.", "Fais dorer la viande, ajoute la sauce : 5 min.", "Mélange et parsème de parmesan."] },
+  { id: "poke", e: "🍣", n: "Poke bowl saumon", g: ["equilibre"], kcal: 635, prot: 35, min: 15, how: "Sans cuisson", ingr: ["150 g de riz cuit", "120 g de saumon frais ou fumé", "½ avocat", "50 g d'edamame", "Concombre, sauce soja, sésame"], steps: ["Dispose le riz au fond du bol.", "Ajoute le saumon en dés, l'avocat, l'edamame et le concombre.", "Sauce soja et sésame."] },
+  { id: "curry", e: "🍛", n: "Curry de poulet au lait de coco léger", g: ["equilibre", "masse"], kcal: 570, prot: 53, min: 20, how: "Poêle", ingr: ["150 g de blanc de poulet", "100 ml de lait de coco léger", "150 g de légumes (poivron, oignon)", "150 g de riz cuit", "1 c. à café de curry"], steps: ["Fais dorer le poulet en morceaux.", "Ajoute les légumes, le curry et le lait de coco : 10 min à feu doux.", "Sers avec le riz."] },
+  { id: "croque", e: "🥪", n: "Croque-monsieur maison et grosse salade", g: ["equilibre"], kcal: 340, prot: 29, min: 8, how: "Air fryer", ingr: ["2 tranches de pain de mie complet", "2 tranches de jambon", "20 g d'emmental", "Salade verte"], steps: ["Monte le croque.", "5 à 6 min à l'air fryer à 190 °C.", "Sers avec une grosse salade."] },
+  { id: "tartines_avo", e: "🥑", n: "Tartines avocat et œufs", g: ["equilibre", "masse"], kcal: 470, prot: 22, min: 10, how: "Poêle", ingr: ["80 g de pain complet", "½ avocat", "2 œufs", "Sel, poivre, piment"], steps: ["Fais griller le pain et écrase l'avocat dessus.", "Cuis les œufs au plat ou mollets.", "Pose-les sur les tartines."] },
+  { id: "bowl_boeuf", e: "🥩", n: "Gros bowl bœuf, riz, œuf et avocat", g: ["masse"], kcal: 820, prot: 55, min: 15, how: "Poêle", ingr: ["250 g de riz cuit", "150 g de bœuf en lamelles", "1 œuf", "½ avocat", "Sauce soja"], steps: ["Saisis le bœuf 2 min de chaque côté.", "Cuis l'œuf au plat.", "Dispose le tout sur le riz avec l'avocat."] },
+  { id: "pates_thon", e: "🐟", n: "Pâtes au thon et à la tomate", g: ["masse"], kcal: 870, prot: 57, min: 15, how: "Poêle", ingr: ["150 g de pâtes crues", "1 grosse boîte de thon (140 g égoutté)", "150 g de sauce tomate", "1 c. à soupe d'huile d'olive"], steps: ["Cuis les pâtes.", "Réchauffe la sauce avec le thon et l'huile.", "Mélange."] },
+  { id: "shake", e: "🥤", n: "Shake prise de masse", g: ["masse"], kcal: 755, prot: 50, min: 3, how: "Sans cuisson", ingr: ["400 ml de lait demi-écrémé", "1 banane", "60 g de flocons d'avoine", "20 g de beurre de cacahuète", "1 dose de whey (30 g)"], steps: ["Tout au blender, 30 secondes."] },
+  { id: "pancakes", e: "🥞", n: "Pancakes protéinés", g: ["masse", "equilibre"], kcal: 665, prot: 40, min: 15, how: "Poêle", ingr: ["80 g de flocons d'avoine mixés", "2 œufs", "150 g de skyr", "1 banane", "1 c. à café de miel"], steps: ["Mixe tout sauf le miel.", "Cuis de petits pancakes 2 min par face dans une poêle antiadhésive.", "Un filet de miel dessus."] },
+  { id: "wraps_poulet", e: "🌯", n: "2 wraps poulet, avocat et fromage", g: ["masse"], kcal: 840, prot: 64, min: 10, how: "Sans cuisson", ingr: ["2 tortillas", "150 g de poulet cuit", "½ avocat", "30 g de fromage râpé", "Salade, tomate"], steps: ["Garnis les tortillas.", "Roule-les et passe 2 min à la poêle pour faire fondre le fromage (facultatif)."] }
+];
+const GOAL_COL = { seche: "b-mint", equilibre: "b-sky", masse: "b-tomato" };
 
 /* ---------- Musculation ---------- */
 const GROUPS = {
@@ -226,7 +255,7 @@ const BLANK_PROFILE = {
   whey: { g: 30, kcal: 115, prot: 23 }, creaG: 5, tendon: false, context: "", v: 4
 };
 let S = { profile: { ...BLANK_PROFILE }, days: {}, sessions: {} };
-const UI = { tab: "jour", date: today(), month: today().slice(0, 7), activeSession: null, noResume: false, editProgram: false, region: null, coach: "", coachBusy: false, lastToday: today() };
+const UI = { tab: "jour", date: today(), month: today().slice(0, 7), activeSession: null, noResume: false, editProgram: false, region: null, goal: "seche", rfilter: "all", aiRecipes: [], aiBusy: false, aiErr: "", coach: "", coachBusy: false, lastToday: today() };
 let MEMO = {};
 const fresh = () => { MEMO = {}; };
 
@@ -368,16 +397,16 @@ function render() {
   if (!setup) { view.innerHTML = viewOnboarding(); return; }
   renderTop();
   document.querySelectorAll(".tabbar [data-tab]").forEach(b => b.setAttribute("aria-current", b.dataset.tab === UI.tab ? "page" : "false"));
-  view.innerHTML = { jour: viewJour, journal: viewJournal, corps: viewCorps, progres: viewProgres, plan: viewPlan }[UI.tab]();
+  view.innerHTML = { jour: viewJour, journal: viewJournal, corps: viewCorps, progres: viewProgres, plan: viewPlan, recettes: viewRecettes }[UI.tab]();
 }
 function renderKeepFocus() {
   setTimeout(() => { const id = document.activeElement && document.activeElement.id; render(); const el = id && $(id); if (el) el.focus(); }, 0);
 }
 function renderTop() {
   const p = S.profile, d = parseD(UI.date), isT = UI.date === today();
-  const titles = { jour: isT ? "Aujourd'hui" : cap(JOURS_L[d.getDay()]) + " " + d.getDate(), journal: cap(MOIS_L[parseD(UI.month).getMonth()]), corps: "Ton corps", progres: "Progrès", plan: "Réglages" };
+  const titles = { jour: isT ? "Aujourd'hui" : cap(JOURS_L[d.getDay()]) + " " + d.getDate(), journal: cap(MOIS_L[parseD(UI.month).getMonth()]), corps: "Ton corps", progres: "Progrès", plan: "Réglages", recettes: "Recettes" };
   const left = Math.max(0, diffDays(today(), p.goalDate));
-  $("when").innerHTML = `<h1>${titles[UI.tab]}</h1><span class="mono muted">J−${left} · objectif ${f1(p.goalKg)} kg</span>`;
+  $("when").innerHTML = `<h1>${titles[UI.tab]}</h1><span class="mono muted">J−${left} → ${f1(p.goalKg)} kg</span>`;
   const lost = p.startKg - currentKg();
   $("kgchip").innerHTML = `${f1(currentKg())}<small>${lost > 0.05 ? "−" + f1(lost) : "kg"}</small>`;
 }
@@ -445,7 +474,7 @@ function viewJour() {
       <input type="text" id="quick-in" enterkeyhint="send" placeholder="J'ai mangé…" aria-label="Écris ce que tu as mangé ou fait">
       <button class="round" type="submit" aria-label="Analyser" style="background:var(--tomato);color:var(--block-ink)">${ICON_SEND}</button>
     </form>
-    <div class="row"><button class="btn small" data-act="add-meal">🍽️ Plats et liste</button><button class="btn small" data-act="add-photo">📷 Photo</button>${st.n > 1 ? `<span class="tag t-blue">🔥 ${st.n} jours${st.jokerFree ? " · joker dispo" : ""}</span>` : ""}</div>
+    <div class="row"><button class="btn small" data-act="add-meal">🍽️ Plats et liste</button><button class="btn small" data-act="add-photo">📷 Photo</button><button class="btn small" data-act="go" data-tab="recettes">🍳 Idées recettes</button>${st.n > 1 ? `<span class="tag t-blue">🔥 ${st.n} jours${st.jokerFree ? " · joker dispo" : ""}</span>` : ""}</div>
   </section>`;
 
   const tips = [], hr = new Date().getHours(), missP = p.prot - tot.prot;
@@ -530,15 +559,18 @@ function figSVG(side, vals, ctx) {
   const parts = ANATOMY[side];
   const angles = new Set();
   Object.values(REGIONS).forEach(r => { angles.add(r.a); angles.add(-r.a); });
-  const defs = [...angles].map(a => `<pattern id="${ctx}-${side}-f${a < 0 ? "m" + -a : a}" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(${a})"><line x1="0" y1="0" x2="0" y2="10" stroke="#000" stroke-opacity=".28" stroke-width="2.4"/></pattern>`).join("");
+  // Fibres : trois traits d'épaisseur et d'opacité différentes par motif, pour un rendu organique ; modelé : dégradé clair au centre, sombre sur les bords
+  const defs = [...angles].map(a => `<pattern id="${ctx}-${side}-f${a < 0 ? "m" + -a : a}" width="7" height="40" patternUnits="userSpaceOnUse" patternTransform="rotate(${a})"><line x1="1" y1="0" x2="1" y2="40" stroke="#000" stroke-opacity=".3" stroke-width="1.5"/><line x1="3.6" y1="0" x2="3.6" y2="40" stroke="#000" stroke-opacity=".12" stroke-width=".9"/><line x1="5.6" y1="0" x2="5.6" y2="40" stroke="#000" stroke-opacity=".22" stroke-width="1.1"/><line x1="3.6" y1="14" x2="3.6" y2="22" stroke="#fff" stroke-opacity=".18" stroke-width=".9"/></pattern>`).join("") +
+    `<radialGradient id="${ctx}-${side}-sh" cx="42%" cy="34%" r="78%"><stop offset="0" stop-color="#fff" stop-opacity=".42"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/><stop offset=".78" stop-color="#000" stop-opacity=".18"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></radialGradient>`;
+  const sh = `url(#${ctx}-${side}-sh)`;
   const byRegion = {}, neutral = [];
   parts.forEach(([r, s, d]) => { if (r && REGIONS[r]) (byRegion[r] = byRegion[r] || []).push([s, d]); else neutral.push(d); });
-  let g = `<g fill="#2E2740" stroke="#0B0910" stroke-width="3">${neutral.map(d => `<path d="${d}"/>`).join("")}</g>`;
+  let g = `<g stroke="#0B0910" stroke-width="3">${neutral.map(d => `<path d="${d}" fill="#2E2740"/><path d="${d}" fill="${sh}" stroke="none"/>`).join("")}</g>`;
   for (const [r, list] of Object.entries(byRegion)) {
     const v = regionVal(r, vals), sel = UI.region === r, a = REGIONS[r].a;
     const label = REGIONS[r].g.map(x => GROUPS[x]).join(" et ");
     g += `<g class="mu ${sel ? "sel" : ""}" id="mu-${ctx}-${r}" data-act="region" data-r="${r}" tabindex="0" role="button" aria-pressed="${sel}" aria-label="${label}, ${fkg(v)} séries">` +
-      list.map(([s, d]) => { const ang = s === "r" ? -a : a; return `<path d="${d}" fill="${HEAT[heatIdx(v)]}" stroke="#0B0910" stroke-width="3"/><path d="${d}" fill="url(#${ctx}-${side}-f${ang < 0 ? "m" + -ang : ang})" pointer-events="none"/>`; }).join("") + `</g>`;
+      list.map(([s, d]) => { const ang = s === "r" ? -a : a; return `<path d="${d}" fill="${HEAT[heatIdx(v)]}" stroke="#0B0910" stroke-width="3"/><path d="${d}" fill="url(#${ctx}-${side}-f${ang < 0 ? "m" + -ang : ang})" pointer-events="none"/><path d="${d}" fill="${sh}" pointer-events="none"/>`; }).join("") + `</g>`;
   }
   return `<div class="fig"><svg viewBox="${side === "front" ? "40 70 644 1300" : "764 70 644 1300"}"><defs>${defs}</defs>${g}</svg><span>${side === "front" ? "FACE" : "DOS"}</span></div>`;
 }
@@ -755,6 +787,64 @@ function weekTable() {
     rows.push(`<tr><td>${fmtD(ws)}</td><td>${tEnd ? f1(tEnd) : "—"}</td><td>${kcalAvg ? f0(kcalAvg) : "—"}</td><td>${logged.length ? inT + "/" + logged.length : "—"}</td><td>${sess}</td><td>${walk ? f1(walk / 60) + " h" : "—"}</td></tr>`);
   }
   return `<section><h2>Semaine par semaine</h2><div class="tablewrap"><table><thead><tr><th>Semaine</th><th>Tendance</th><th>kcal/j</th><th>Cible</th><th>Séances</th><th>Marche</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></section>`;
+}
+
+/* ---------- Recettes ---------- */
+function recipeCard(r, src, i) {
+  const tags = [`${f0(r.kcal)} kcal`, `${f0(r.prot)} g prot.`, `${r.min} min`, r.how].filter(Boolean);
+  return `<article class="card recipe">
+    <div class="row" style="flex-wrap:nowrap;align-items:flex-start"><span class="emo big-emo" aria-hidden="true">${esc(r.e || "🍽️")}</span><div style="display:grid;gap:6px;min-width:0"><h3>${esc(r.n)}</h3><div class="row" style="gap:5px">${tags.map(t => `<span class="tag t-none">${esc(t)}</span>`).join("")}</div></div></div>
+    <details class="learn"><summary>Voir la recette</summary>
+      <p><b>Ingrédients</b></p><ul class="rlist">${(r.ingr || []).map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+      <p><b>Étapes</b></p><ol class="rlist">${(r.steps || []).map(x => `<li>${esc(x)}</li>`).join("")}</ol></details>
+    <button class="btn small sun" data-act="eat-recipe" data-src="${src}" data-i="${i}">Je l'ai mangé</button></article>`;
+}
+function viewRecettes() {
+  const tgt = kcalTarget(), tot = dayTotals(today()), left = tgt - tot.kcal, missP = S.profile.prot - tot.prot;
+  const g = UI.goal, f = UI.rfilter;
+  let list = RECIPES.map((r, i) => [r, i]).filter(([r]) => r.g.includes(g));
+  if (f === "raw") list = list.filter(([r]) => r.how === "Sans cuisson");
+  if (f === "quick") list = list.filter(([r]) => r.min <= 15);
+  if (f === "fits") list = list.filter(([r]) => r.kcal <= left + 50);
+  const goalTxt = { seche: "Assiettes rassasiantes et riches en protéines, pour rester sous ta cible.", equilibre: "Des repas complets pour tenir ton poids sans y penser.", masse: "Plus de féculents et de bons gras : vise environ 300 kcal au-dessus de ton maintien." }[g];
+  let h = `<section class="blk ${GOAL_COL[g]}"><span class="mono">Ton objectif</span>
+    <div class="seg" role="group" aria-label="Objectif">${GOALS.map(([k, n]) => `<button data-act="goal" data-k="${k}" aria-pressed="${g === k}">${n}</button>`).join("")}</div>
+    <span class="small">${goalTxt}</span>
+    <span class="small">Aujourd'hui : il te reste <b>${f0(Math.max(0, left))} kcal</b>${missP > 0 ? ` et <b>${f0(missP)} g</b> de protéines` : ""}.</span></section>`;
+  h += `<section class="card"><h3>✨ Idées sur mesure</h3><p class="small muted">Claude te propose 3 recettes selon ton objectif, ce qu'il te reste aujourd'hui et ce que tu as sous la main.</p>
+    <input type="text" id="r-have" placeholder="Ce que j'ai : œufs, riz, thon, courgettes…" aria-label="Ce que tu as sous la main" value="${esc(UI.rHave || "")}">
+    <button class="btn hot" data-act="ai-recipes" ${UI.aiBusy ? "disabled" : ""}>${UI.aiBusy ? `<span class="spin"></span> Claude cuisine…` : "Proposer 3 recettes"}</button>
+    ${!hasKey() ? `<p class="small muted">Ajoute ta clé API dans Réglages pour activer cette partie.</p>` : ""}${UI.aiErr ? `<div class="note">${esc(UI.aiErr)}</div>` : ""}</section>`;
+  if (UI.aiRecipes.length) h += `<section><h2>Pour toi, maintenant</h2>${UI.aiRecipes.map((r, i) => recipeCard(r, "ai", i)).join("")}</section>`;
+  h += `<section><div class="scroller">${[["all", "Toutes"], ["fits", "Rentre dans ma journée"], ["quick", "15 min max"], ["raw", "Sans cuisson"]].map(([k, n]) => `<button class="chip" data-act="rfilter" data-k="${k}" aria-pressed="${f === k}">${n}</button>`).join("")}</div>
+    ${list.length ? list.map(([r, i]) => recipeCard(r, "base", i)).join("") : `<div class="empty">Aucune recette ne correspond à ce filtre. Essaie « Toutes ».</div>`}</section>`;
+  return h;
+}
+const RECIPE_SCHEMA = { type: "object", additionalProperties: false, required: ["recipes"], properties: { recipes: { type: "array", items: { type: "object", additionalProperties: false, required: ["e", "n", "kcal", "prot", "min", "how", "ingr", "steps"], properties: { e: { type: "string" }, n: { type: "string" }, kcal: { type: "number" }, prot: { type: "number" }, min: { type: "integer" }, how: { type: "string" }, ingr: { type: "array", items: { type: "string" } }, steps: { type: "array", items: { type: "string" } } } } } } };
+async function aiRecipes() {
+  if (UI.aiBusy) return;
+  if (!hasKey()) { UI.aiErr = "Ajoute ta clé API dans Réglages pour que Claude propose des recettes."; render(); return; }
+  const have = ($("r-have") || {}).value || "";
+  UI.rHave = have; UI.aiBusy = true; UI.aiErr = ""; render();
+  const tot = dayTotals(today()), left = kcalTarget() - tot.kcal, missP = S.profile.prot - tot.prot;
+  const goal = { seche: "sèche (perte de gras en gardant le muscle)", equilibre: "équilibre (maintien du poids)", masse: "prise de masse propre" }[UI.goal];
+  try {
+    const res = await askJSON({ system: systemPrompt().split("Règles :")[0] + "Tu proposes des recettes simples, rapides et healthy, faciles à faire même pour quelqu'un qui cuisine peu (micro-ondes, air fryer, une poêle). Valeurs nutritionnelles réalistes pour une portion.", content: `Objectif : ${goal}. Il me reste ${f0(Math.max(0, left))} kcal et ${f0(Math.max(0, missP))} g de protéines aujourd'hui. Heure : ${new Date().toTimeString().slice(0, 5)}.
+${have.trim() ? "Ce que j'ai sous la main : " + have.trim() : "Pas de contrainte d'ingrédients."}
+Propose 3 recettes variées en français, avec un emoji, des quantités précises, des étapes courtes (« how » = Sans cuisson, Micro-ondes, Air fryer, Poêle ou Four).`, schema: RECIPE_SCHEMA });
+    UI.aiRecipes = (res.recipes || []).slice(0, 3);
+    if (!UI.aiRecipes.length) UI.aiErr = "Claude n'a rien proposé, réessaie.";
+  } catch (e) { UI.aiErr = explain(e); }
+  UI.aiBusy = false; render();
+}
+function eatRecipe(src, i) {
+  const r = src === "ai" ? UI.aiRecipes[i] : RECIPES[i];
+  if (!r) return;
+  const d = today();
+  if (!S.days[d]) S.days[d] = day(d);
+  S.days[d].meals.push({ id: uid(), slot: defaultSlot(), items: [{ e: r.e || "🍽️", n: r.n, d: "recette", kcal: Math.round(r.kcal), prot: Math.round(r.prot) }], tip: "" });
+  saveDay(d); UI.date = d; render();
+  toast(`Ajouté au journal · ${f0(r.kcal)} kcal`);
 }
 
 /* ---------- Onglet Plan / Réglages ---------- */
@@ -1266,6 +1356,10 @@ document.addEventListener("click", e => {
     case "edit-prog": UI.editProgram = !UI.editProgram; render(); break;
     case "rm-ex": { const pr = JSON.parse(JSON.stringify(program())); pr[a.dataset.t].splice(+a.dataset.i, 1); S.profile.program = pr; save(); render(); break; }
     case "mv": { const pr = JSON.parse(JSON.stringify(program())), arr = pr[a.dataset.t], i = +a.dataset.i; if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; S.profile.program = pr; save(); render(); } break; }
+    case "goal": UI.goal = a.dataset.k; render(); break;
+    case "rfilter": UI.rfilter = a.dataset.k; render(); break;
+    case "ai-recipes": aiRecipes(); break;
+    case "eat-recipe": eatRecipe(a.dataset.src, +a.dataset.i); break;
     case "auto": S.profile.auto = S.profile.auto === false; save(); render(); break;
     case "conva": S.profile.mode = conva() ? "seche" : "conva"; save(); render(); toast(conva() ? "Mode convalescence activé" : "Retour au mode sèche"); break;
     case "tendon": S.profile.tendon = !S.profile.tendon; save(); render(); break;
