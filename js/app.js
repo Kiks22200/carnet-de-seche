@@ -119,8 +119,16 @@ const FOODS = [
   { k: "soda", c: "boi", e: "🥤", n: "Soda", u: "u", kc: 140, pr: 0, un: "canette 33 cl", kw: ["coca", "soda", "fanta", "ice tea"] },
   { k: "soda0", c: "boi", e: "🥤", n: "Soda zéro", u: "u", kc: 1, pr: 0, un: "canette", kw: ["zero", "light"] },
   { k: "biere", c: "boi", e: "🍺", n: "Bière", u: "u", kc: 105, pr: 1, un: "demi (25 cl)", kw: ["biere", "demi"] },
+  { k: "pinte", c: "boi", e: "🍺", n: "Bière, pinte", u: "u", kc: 210, pr: 2, un: "pinte (50 cl)", kw: ["pinte"] },
+  { k: "biere_forte", c: "boi", e: "🍺", n: "Bière forte / IPA", u: "u", kc: 200, pr: 1.5, un: "bouteille (33 cl)", kw: ["ipa", "biere forte", "leffe", "chouffe", "triple"] },
+  { k: "champagne", c: "boi", e: "🥂", n: "Champagne / prosecco", u: "u", kc: 85, pr: 0, un: "flûte (12 cl)", kw: ["champagne", "prosecco", "cremant", "mousseux"] },
+  { k: "cidre", c: "boi", e: "🍏", n: "Cidre", u: "u", kc: 95, pr: 0, un: "verre (25 cl)", kw: ["cidre"] },
+  { k: "long_sucre", c: "boi", e: "🥃", n: "Alcool + soda sucré (rhum coca, vodka orange…)", u: "u", kc: 165, pr: 0, un: "verre (4 cl + soda)", kw: ["rhum coca", "whisky coca", "jack coca", "vodka orange", "vodka redbull", "gin tonic"] },
+  { k: "long_zero", c: "boi", e: "🥃", n: "Alcool + soda zéro", u: "u", kc: 95, pr: 0, un: "verre (4 cl + soda zéro)", kw: ["coca zero", "coca light"] },
+  { k: "cocktail", c: "boi", e: "🍹", n: "Cocktail (mojito, spritz, piña colada…)", u: "u", kc: 200, pr: 0, un: "verre", kw: ["mojito", "spritz", "cocktail", "pina colada", "caipirinha", "margarita"] },
+  { k: "shot", c: "boi", e: "🥃", n: "Shot", u: "u", kc: 70, pr: 0, un: "shot (3 cl)", kw: ["shot", "shooter", "tequila", "jager"] },
   { k: "vin", c: "boi", e: "🍷", n: "Vin", u: "u", kc: 100, pr: 0, un: "verre (12 cl)", kw: ["vin"] },
-  { k: "fort", c: "boi", e: "🍸", n: "Alcool fort / cocktail", u: "u", kc: 160, pr: 0, un: "verre", kw: ["cocktail", "whisky", "rhum", "vodka"] },
+  { k: "fort", c: "boi", e: "🍸", n: "Alcool fort pur (whisky, rhum, vodka…)", u: "u", kc: 95, pr: 0, un: "verre (4 cl)", kw: ["whisky", "rhum", "vodka"] },
   { k: "jus", c: "boi", e: "🧃", n: "Jus de fruits", u: "u", kc: 90, pr: 1, un: "verre (20 cl)", kw: ["jus"] },
 
   { k: "burger", c: "plat", e: "🍔", n: "Menu burger frites", u: "u", kc: 1100, pr: 35, un: "menu", kw: ["burger", "mcdo", "big mac"] },
@@ -140,8 +148,10 @@ const SLOTS = [
   { k: "matin", n: "Matin", share: 0.2, col: "b-sky" },
   { k: "midi", n: "Midi", share: 0.35, col: "b-sun" },
   { k: "gouter", n: "Goûter", share: 0.1, col: "b-pink" },
-  { k: "soir", n: "Soir", share: 0.35, col: "b-lilac" }
+  { k: "soir", n: "Soir", share: 0.35, col: "b-lilac" },
+  { k: "soiree", n: "Soirée", share: 0, col: "b-pink", extra: true }
 ];
+const PARTY_DRINKS = ["biere", "pinte", "vin", "champagne", "long_sucre", "long_zero", "cocktail", "shot", "cidre", "soda0"];
 const PRESETS = [
   { e: "🍝", n: "Pâtes sauce soja + steak", items: [{ k: "pates_cuit", por: 1 }, { k: "boeuf", por: 1, cook: 1 }, { k: "soja", cnt: 1 }] },
   { e: "🐟", n: "Poisson blanc + patates air fryer + haricots", items: [{ k: "poisson", por: 1, cook: 1 }, { k: "pdt_air", por: 1 }, { k: "haricots", por: 1 }] },
@@ -441,14 +451,14 @@ function renderInner() {
   if (!setup) { view.innerHTML = viewOnboarding(); return; }
   renderTop();
   document.querySelectorAll(".tabbar [data-tab]").forEach(b => b.setAttribute("aria-current", b.dataset.tab === UI.tab ? "page" : "false"));
-  view.innerHTML = { jour: viewJour, journal: viewJournal, corps: viewCorps, progres: viewProgres, plan: viewPlan, recettes: viewRecettes }[UI.tab]();
+  view.innerHTML = { jour: viewJour, journal: viewJournal, corps: viewCorps, progres: viewProgres, plan: viewPlan, recettes: viewRecettes, soiree: viewSoiree }[UI.tab]();
 }
 function renderKeepFocus() {
   setTimeout(() => { const id = document.activeElement && document.activeElement.id; render(); const el = id && $(id); if (el) el.focus(); }, 0);
 }
 function renderTop() {
   const p = S.profile, d = parseD(UI.date), isT = UI.date === today();
-  const titles = { jour: isT ? "Aujourd'hui" : cap(JOURS_L[d.getDay()]) + " " + d.getDate(), journal: cap(MOIS_L[parseD(UI.month).getMonth()]), corps: "Ton corps", progres: "Progrès", plan: "Réglages", recettes: "Recettes" };
+  const titles = { jour: isT ? "Aujourd'hui" : cap(JOURS_L[d.getDay()]) + " " + d.getDate(), journal: cap(MOIS_L[parseD(UI.month).getMonth()]), corps: "Ton corps", progres: "Progrès", plan: "Réglages", recettes: "Recettes", soiree: "Soirée" };
   const left = Math.max(0, diffDays(today(), p.goalDate));
   $("when").innerHTML = `<h1>${titles[UI.tab]}</h1><span class="mono muted">J−${left} → ${f1(p.goalKg)} kg</span>`;
   const lost = p.startKg - currentKg();
@@ -526,7 +536,7 @@ function viewJour() {
       <input type="text" id="quick-in" enterkeyhint="send" placeholder="J'ai mangé…" aria-label="Écris ce que tu as mangé ou fait">
       <button class="round" type="submit" aria-label="Analyser" style="background:var(--tomato);color:var(--block-ink)">${ICON_SEND}</button>
     </form>
-    <div class="row"><button class="btn small" data-act="add-meal">🍽️ Plats et liste</button><button class="btn small" data-act="add-photo">📷 Photo</button><button class="btn small" data-act="go" data-tab="recettes">🍳 Idées recettes</button>${st.n > 1 ? `<span class="tag t-blue">🔥 ${st.n} jours${st.jokerFree ? " · joker dispo" : ""}</span>` : ""}</div>
+    <div class="row"><button class="btn small" data-act="add-meal">🍽️ Plats et liste</button><button class="btn small" data-act="add-photo">📷 Photo</button><button class="btn small" data-act="go" data-tab="recettes">🍳 Idées recettes</button><button class="btn small" data-act="go" data-tab="soiree">🍻 Soirée</button>${st.n > 1 ? `<span class="tag t-blue">🔥 ${st.n} jours${st.jokerFree ? " · joker dispo" : ""}</span>` : ""}</div>
   </section>`;
 
   const tips = [], hr = new Date().getHours(), missP = p.prot - tot.prot;
@@ -539,6 +549,8 @@ function viewJour() {
   if (isToday && p.tendon && (D.pain >= 5 || (pt != null && pt >= 1.5))) {
     tips.push(`<div class="note"><b>Ta blessure :</b> ${D.pain >= 5 ? "douleur à " + D.pain + "/10 aujourd'hui" : "la douleur monte depuis quelques jours"}. Remplace la marche par du vélo léger ou du repos, saute les exercices qui font mal et parles-en à ton médecin. Consulte vite en cas de claquement, de gonflement ou si tu ne peux plus pousser sur le pied ou tendre le genou.</div>`);
   }
+  if (partyOn(D)) { const r = partyReserve(D), drunk = partyDrinks(D).kcal; tips.push(`<button class="blk b-pink" data-act="go" data-tab="soiree" style="text-align:left"><span class="mono">🍻 Soirée ce soir</span><b style="font-family:var(--f-display);font-size:19px">${drunk ? f0(drunk) + " kcal bues pour l'instant" : "≈ " + f0(r) + " kcal gardées pour ta soirée"}</b><span class="small">${drunk ? "Touche pour compter tes verres" : "Repas de la journée : vise " + f0(Math.max(0, tgt - r)) + " kcal au total. Touche pour tes verres."}</span></button>`); }
+  else if (isToday && [5, 6].includes(new Date().getDay()) && hr >= 15) tips.push(`<button class="card" data-act="go" data-tab="soiree" style="text-align:left;gap:4px"><b>🍻 Une soirée de prévue ?</b><span class="small muted">Prépare-la en 10 secondes : l'app ajuste ta journée et compte tes verres.</span></button>`);
   const sl3 = avgSleep(3);
   if (isToday && sl3 != null && sl3 < 6.5) tips.push(`<div class="blk b-sky"><span class="mono">Sommeil</span><p>Tu dors <b>${fmtH(sl3)}</b> en moyenne ces dernières nuits. Sous 7 h, la faim monte et tu perds plus de muscle : vise un coucher 30 min plus tôt ce soir.</p></div>`);
   const nDays = Object.keys(S.days).length, lastExp = p.lastExport;
@@ -559,7 +571,9 @@ function viewJour() {
   h += `<section><h2>Journal du jour</h2>`;
   for (const s of SLOTS) {
     const ms = D.meals.filter(m => m.slot === s.k), stt = itemTotals(ms.flatMap(m => m.items));
-    h += `<div class="slot"><div class="slot-head ${s.col}"><b>${s.n}</b>${ms.length ? `<span class="tag t-${lightFor(stt.kcal / (tgt * s.share))}">${f0(stt.kcal)} kcal</span>` : `<span class="mono">≈ ${f0(tgt * s.share)} kcal</span>`}</div><div class="slot-body">`;
+    if (s.extra && !ms.length && !partyOn(D)) continue;
+    const tag = s.extra ? (ms.length ? `<span class="tag t-none">${f0(stt.kcal)} kcal</span>` : `<span class="mono">${partyOn(D) ? "≈ " + f0(partyReserve(D)) + " kcal prévues" : ""}</span>`) : ms.length ? `<span class="tag t-${lightFor(stt.kcal / (tgt * s.share))}">${f0(stt.kcal)} kcal</span>` : `<span class="mono">≈ ${f0(tgt * s.share)} kcal</span>`;
+    h += `<div class="slot"><div class="slot-head ${s.col}"><b>${s.n}</b>${tag}</div><div class="slot-body">`;
     for (const m of ms) h += `<button class="meal" data-act="edit-meal" data-id="${m.id}"><span class="sr">Modifier : </span>${m.items.map(it => `<div class="item"><span class="emo" aria-hidden="true">${emojiFor(it)}</span><span>${esc(it.n)}${it.d ? `<small>${esc(it.d)}</small>` : ""}</span><span class="k">${f0(it.kcal)}</span></div>`).join("")}${m.tip ? `<span class="small muted">💡 ${esc(m.tip)}</span>` : ""}</button>`;
     h += `<button class="addline" data-act="add-meal" data-slot="${s.k}">+ ${ms.length ? "Ajouter" : "Noter le " + s.n.toLowerCase()}</button></div></div>`;
   }
@@ -1047,6 +1061,40 @@ function weekTable() {
   return `<section><h2>Semaine par semaine</h2><div class="tablewrap"><table><thead><tr><th>Semaine</th><th>Tendance</th><th>kcal/j</th><th>Cible</th><th>Séances</th><th>Pas/j</th><th>Sommeil</th><th>Marche</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></section>`;
 }
 
+/* ---------- Soirée ---------- */
+const partyMeal = D => D.meals.find(m => m.party);
+const partyDrinks = D => { const m = partyMeal(D); return m ? itemTotals(m.items) : { kcal: 0, prot: 0 }; };
+const partyOn = D => !!(D.party && D.party.plan > 0);
+const partyReserve = D => partyOn(D) ? D.party.plan * (FOOD[D.party.kind] || FOOD.biere).kc : 0;
+function weekBalance() {
+  const mon = mondayOf(today()), tgt = kcalTarget();
+  let sum = 0, n = 0;
+  for (let d = mon; d < today(); d = addDays(d, 1)) if (hasFood(d)) { sum += tgt - dayTotals(d).kcal; n++; }
+  return { sum, n };
+}
+function viewSoiree() {
+  const d = UI.date, D = day(d), tgt = kcalTarget(), tot = dayTotals(d), plan = D.party, m = partyMeal(D);
+  const counts = {}; (m ? m.items : []).forEach(it => { counts[it.k] = it.cnt || 1; });
+  const drinks = partyDrinks(D), wb = weekBalance();
+  const kind = plan ? plan.kind : "biere", reserve = plan ? partyReserve(D) : 0;
+  let h = `<section class="blk b-pink"><span class="mono">${d === today() ? "Ce soir" : fmtD(d, true)}</span><h2>Ta soirée</h2>
+    <span class="small">${drinks.kcal ? `<b>${f0(drinks.kcal)} kcal</b> bues pour l'instant · total du jour ${f0(tot.kcal)} / ${f0(tgt)} kcal` : "Prépare-la, puis compte tes verres ici au fil de la soirée."}</span></section>`;
+  h += `<section class="card"><h3>1. Combien de verres tu prévois ?</h3>
+    <div class="row"><div class="stepper"><button data-act="party-plan" data-v="-1" aria-label="Un verre de moins">−</button><span class="v">${plan ? plan.plan : 0}</span><button data-act="party-plan" data-v="1" aria-label="Un verre de plus">+</button></div>
+    <select id="party-kind" data-party-kind="1" aria-label="Boisson principale">${PARTY_DRINKS.filter(k => k !== "soda0").map(k => `<option value="${k}" ${kind === k ? "selected" : ""}>${esc(FOOD[k].n.split(" (")[0])} · ${FOOD[k].kc} kcal</option>`).join("")}</select></div>
+    ${plan && plan.plan ? `<div class="note info">Garde environ <b>${f0(reserve)} kcal</b> pour ta soirée. Tes repas de la journée : <b>${f0(Math.max(0, tgt - reserve))} kcal</b> au total, avec des protéines et des légumes, moins de féculents et pas de gras ajouté.${wb.n && wb.sum > 0 ? ` Tu as aussi <b>${f0(wb.sum)} kcal d'avance</b> depuis lundi.` : ""}</div>` : `<p class="small muted">L'app réserve les calories de tes verres et te dit combien manger dans la journée pour rester dans ta cible.</p>`}</section>`;
+  h += `<section class="card"><h3>2. Compte tes verres</h3><p class="small muted">Un tap par verre, ils s'ajoutent à ta journée.</p>
+    <div style="display:grid;gap:8px">${PARTY_DRINKS.map(k => { const f = FOOD[k], n = counts[k] || 0; return `<div class="row between" style="flex-wrap:nowrap"><span class="emo" aria-hidden="true">${f.e}</span><div style="flex:1;min-width:0"><b class="small">${esc(f.n)}</b><div class="small muted">${f.kc} kcal / ${esc(f.un)}</div></div><div class="stepper"><button data-act="party-drink" data-k="${k}" data-v="-1" aria-label="Retirer : ${esc(f.n)}" ${n ? "" : "disabled"}>−</button><span class="v">${n}</span><button data-act="party-drink" data-k="${k}" data-v="1" aria-label="Ajouter : ${esc(f.n)}">+</button></div></div>`; }).join("")}</div>
+    <p class="small muted">Un grignotage de fin de soirée (kebab, pizza…) ? Ajoute-le avec le micro ou dans le créneau Soirée.</p></section>`;
+  h += `<section><h2>Les bons réflexes</h2>
+    <article class="blk b-sun"><span class="mono">Avant</span><p class="small">Mange un vrai repas avec des protéines (viande, poisson, œufs) : tu boiras moins vite et tu auras moins faim en fin de soirée. Un grand verre d'eau avant de partir.</p></article>
+    <article class="blk b-sky"><span class="mono">Pendant</span><p class="small">Un verre d'eau entre chaque verre d'alcool. Les choix les plus légers : alcool fort + soda zéro (95 kcal), champagne (85), vin (100). Les plus lourds : pintes, cocktails sucrés, mélanges au soda (165 à 210). Fixe-toi un nombre de verres avant de commencer.</p></article>
+    <article class="blk b-lilac"><span class="mono">Fin de soirée</span><p class="small">Le kebab-frites de 2 h du matin pèse souvent plus que tous les verres (environ 1 000 kcal). Si tu as faim, un sandwich jambon ou une part de pizza fait le travail pour moitié moins.</p></article>
+    <article class="blk b-mint"><span class="mono">Le lendemain</span><p class="small">La balance peut afficher 0,5 à 1 kg de plus (eau et sel) : ce n'est pas du gras, ça repart en 2 jours. Ne saute pas de repas pour compenser : mange normalement, bois beaucoup d'eau, et fais ta séance si tu es en forme. L'alcool freine aussi la récupération musculaire : évite de faire ta grosse séance le lendemain matin.</p></article>
+    <p class="small muted">Repère santé : pas plus de 2 verres par jour et pas tous les jours. Et si tu bois, tu ne conduis pas.</p></section>`;
+  return h;
+}
+
 /* ---------- Recettes ---------- */
 function recipeCard(r, src, i) {
   const tags = [`${f0(r.kcal)} kcal`, `${f0(r.prot)} g prot.`, `${r.min} min`, r.how].filter(Boolean);
@@ -1240,7 +1288,7 @@ function renderComposer() {
   if (C.items.length) body += C.items.map((ci, i) => itemEditor(ci, i)).join("");
   if (C.tip) body += `<div class="note info">💡 ${esc(C.tip)}</div>`;
   if (C.mode === "pick") {
-    if (!C.items.length && !C.id && !C.search.trim()) {
+    if (!C.items.length && !C.id && !C.search.trim() && share > 0) {
       const yest = yesterdayMeal(C.slot), freq = frequentMeals();
       body += `<div><span class="mono muted">Pas le temps de détailler ?</span><div class="express" style="margin-top:6px">${["Léger", "Normal", "Copieux"].map((n, i) => `<button data-act="express" data-v="${i}">${n}<span>≈ ${f0(round50(tgt * share * [0.7, 1, 1.4][i]))} kcal</span></button>`).join("")}</div></div>
         <div style="display:grid;gap:8px"><span class="mono muted">Plats de la maison</span>
@@ -1302,7 +1350,7 @@ const ANALYSE_SCHEMA = {
   required: ["meals", "walk_min", "weight_kg", "whey_doses", "creatine", "pain", "conseil"],
   properties: {
     meals: { type: "array", items: { type: "object", additionalProperties: false, required: ["slot", "items"], properties: {
-      slot: { type: "string", enum: ["matin", "midi", "gouter", "soir"] },
+      slot: { type: "string", enum: ["matin", "midi", "gouter", "soir", "soiree"] },
       items: { type: "array", items: { type: "object", additionalProperties: false, required: ["e", "n", "q", "kcal", "prot"], properties: {
         e: { type: "string" }, n: { type: "string" }, q: { type: "string" }, kcal: { type: "number" }, prot: { type: "number" } } } } } } },
     walk_min: { type: "integer" }, weight_kg: { type: "number" }, whey_doses: { type: "integer" }, creatine: { type: "boolean" }, pain: { type: "integer" }, conseil: { type: "string" }
@@ -1315,8 +1363,9 @@ Profil : ${p.sex === "f" ? "femme" : "homme"}, ${p.age} ans, ${p.heightCm} cm, e
 ${p.context ? "Ce qu'il faut savoir sur lui : " + p.context : ""}
 Règles :
 - Repas : découpe en aliments, estime des portions françaises réalistes quand rien n'est pesé, valeurs pour des aliments cuits. Compte le beurre ou l'huile de cuisson quand c'est mentionné ou visible ; le gras caché est souvent sous-estimé, donc en cas de doute prends le haut de la fourchette. Pour un produit de marque (Kinder, Pitch, Prince, madeleine St Michel…), utilise les valeurs de l'emballage par unité.
-- Créneau : "matin", "midi", "gouter" ou "soir". Déduis-le des mots (« ce matin », « au goûter », « ce soir ») ; sinon utilise le créneau par défaut donné.
+- Créneau : "matin", "midi", "gouter", "soir", ou "soiree" pour les verres et le grignotage d'une soirée (apéro, bar, fête) après le dîner. Déduis-le des mots (« ce matin », « au goûter », « ce soir ») ; sinon utilise le créneau par défaut donné.
 - walk_min : minutes de marche ou de vélo mentionnées, sinon 0. weight_kg : poids mentionné, sinon 0. whey_doses : nombre de shakers de whey mentionnés, sinon 0 (ne les mets pas dans les repas). creatine : true seulement si la créatine est mentionnée. pain : douleur notée sur 10 si mentionnée, sinon -1.
+- Alcool : une bière = demi de 25 cl sauf si « pinte » ; compte le soda des mélanges (rhum coca…). Ne juge pas, donne les calories.
 - conseil : une phrase concrète et bienveillante en français pour faire mieux la prochaine fois, ou "" si tout va bien.
 - Ne invente rien qui n'est pas dit ou visible.`;
 }
@@ -1344,7 +1393,7 @@ function localParse(text, slot) {
   });
   const walk = t.match(/(\d+)\s*(?:min|minutes)\s*(?:de\s+)?(?:marche|velo)/);
   const kg = t.match(/(\d{2,3}(?:[.,]\d)?)\s*(?:kg|kilos)/);
-  return { meals: items.length ? [{ slot, items: items.map(i => ({ e: i.e, n: i.n, q: i.d, kcal: i.kcal, prot: i.prot })) }] : [], walk_min: walk ? +walk[1] : 0, weight_kg: kg ? parseFloat(kg[1].replace(",", ".")) : 0, whey_doses: /whey|shaker|proteine en poudre/.test(t) ? 1 : 0, creatine: /creatine/.test(t), pain: -1, conseil: "", local: true };
+  return { meals: items.length ? [{ slot, items: items.map(i => ({ k: i.k, e: i.e, n: i.n, q: i.d, kcal: i.kcal, prot: i.prot })) }] : [], walk_min: walk ? +walk[1] : 0, weight_kg: kg ? parseFloat(kg[1].replace(",", ".")) : 0, whey_doses: /whey|shaker|proteine en poudre/.test(t) ? 1 : 0, creatine: /creatine/.test(t), pain: -1, conseil: "", local: true };
 }
 
 /* Revue de ce qui a été compris */
@@ -1399,7 +1448,7 @@ function saveReview() {
   const D = S.days[date];
   let n = 0;
   d.meals.forEach(m => {
-    const items = m.items.filter(i => i.keep && (+i.kcal > 0 || +i.prot > 0)).map(i => ({ e: i.e, n: i.n, d: i.q, kcal: Math.round(+i.kcal), prot: Math.round((+i.prot || 0) * 10) / 10 }));
+    const items = m.items.filter(i => i.keep && (+i.kcal > 0 || +i.prot > 0)).map(i => ({ ...(i.k ? { k: i.k } : {}), e: i.e, n: i.n, d: i.q, kcal: Math.round(+i.kcal), prot: Math.round((+i.prot || 0) * 10) / 10 }));
     if (items.length) { D.meals.push({ id: uid(), slot: m.slot, items, tip: d.conseil || "" }); n += items.length; }
   });
   if (k.walk) D.walk = (D.walk || 0) + d.walk_min;
@@ -1827,6 +1876,19 @@ document.addEventListener("click", e => {
     case "x-reset": { const c = { ...(S.profile.customEx || {}) }; delete c[X.id]; S.profile.customEx = c; save(); closeSheet(); X = null; render(); toast("Exercice remis à l'original"); break; }
     case "x-remove": if (a.dataset.confirm) { const pr = JSON.parse(JSON.stringify(program())); pr[X.tpl] = pr[X.tpl].filter(k => k !== X.id); S.profile.program = pr; save(); closeSheet(); X = null; render(); toast("Retiré de la séance"); } else { a.dataset.confirm = "1"; a.textContent = "Confirmer le retrait"; } break;
     case "goal": UI.goal = a.dataset.k; render(); break;
+    case "party-plan": { const d = D(), cur = d.party || { plan: 0, kind: "biere" }, n = clamp(cur.plan + +a.dataset.v, 0, 15); d.party = { ...cur, plan: n }; saveDay(UI.date); render(); break; }
+    case "party-drink": {
+      const d = D(), k = a.dataset.k, f = FOOD[k];
+      let m = partyMeal(d);
+      if (!m) { m = { id: uid(), slot: "soiree", party: true, items: [], tip: "" }; d.meals.push(m); }
+      const it = m.items.find(x => x.k === k), n = clamp(((it && it.cnt) || 0) + +a.dataset.v, 0, 30);
+      if (it) { if (n) Object.assign(it, { cnt: n, kcal: f.kc * n, prot: Math.round(f.pr * n * 10) / 10, d: n + " × " + f.un }); else m.items = m.items.filter(x => x !== it); }
+      else if (n) m.items.push({ k, e: f.e, n: f.n, cnt: n, kcal: f.kc * n, prot: Math.round(f.pr * n * 10) / 10, d: n + " × " + f.un });
+      if (!m.items.length) d.meals = d.meals.filter(x => x !== m);
+      saveDay(UI.date); render();
+      if (+a.dataset.v > 0) { const tot = partyDrinks(d).kcal; toast(`${f.e} +${f.kc} kcal · ${f0(tot)} kcal ce soir`); }
+      break;
+    }
     case "rfilter": UI.rfilter = a.dataset.k; render(); break;
     case "ai-recipes": aiRecipes(); break;
     case "eat-recipe": eatRecipe(a.dataset.src, +a.dataset.i); break;
@@ -1916,6 +1978,7 @@ document.addEventListener("change", async e => {
   if (t.dataset.sleep) { const d = UI.date; if (!S.days[d]) S.days[d] = day(d); S.days[d].sleep = { ...(S.days[d].sleep || {}), [t.dataset.sleep]: t.value }; saveDay(d); renderKeepFocus(); return; }
   if (t.id === "x-demo" && X) { syncX(); renderExEditor(); return; }
   if (t.dataset.steps) { const d = UI.date; if (!S.days[d]) S.days[d] = day(d); S.days[d].steps = t.value === "" ? null : Math.max(0, Math.round(+t.value)); saveDay(d); toast(t.value === "" ? "Pas effacés" : "Pas enregistrés"); return; }
+  if (t.dataset.partyKind) { const d = UI.date; if (!S.days[d]) S.days[d] = day(d); S.days[d].party = { plan: (S.days[d].party || {}).plan || 0, kind: t.value }; saveDay(d); renderKeepFocus(); return; }
   if (t.dataset.tplname) { S.profile.tplNames = { ...(S.profile.tplNames || {}), [t.dataset.tplname]: cleanTxt(t.value) }; save(); renderKeepFocus(); return; }
   if (t.dataset.ctx) { S.profile.context = t.value.trim(); save(); toast("Enregistré"); return; }
   if (t.dataset.prof) {
