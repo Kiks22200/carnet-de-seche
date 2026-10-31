@@ -120,6 +120,7 @@ const FOODS = [
   { k: "soda0", c: "boi", e: "🥤", n: "Soda zéro", u: "u", kc: 1, pr: 0, un: "canette", kw: ["zero", "light"] },
   { k: "biere", c: "boi", e: "🍺", n: "Bière", u: "u", kc: 105, pr: 1, un: "demi (25 cl)", kw: ["biere", "demi"] },
   { k: "pinte", c: "boi", e: "🍺", n: "Bière, pinte", u: "u", kc: 210, pr: 2, un: "pinte (50 cl)", kw: ["pinte"] },
+  { k: "guinness", c: "boi", e: "🍺", n: "Guinness / stout, pinte", u: "u", kc: 185, pr: 1.5, un: "pinte (50 cl)", kw: ["guinness", "stout"] },
   { k: "biere_forte", c: "boi", e: "🍺", n: "Bière forte / IPA", u: "u", kc: 200, pr: 1.5, un: "bouteille (33 cl)", kw: ["ipa", "biere forte", "leffe", "chouffe", "triple"] },
   { k: "champagne", c: "boi", e: "🥂", n: "Champagne / prosecco", u: "u", kc: 85, pr: 0, un: "flûte (12 cl)", kw: ["champagne", "prosecco", "cremant", "mousseux"] },
   { k: "cidre", c: "boi", e: "🍏", n: "Cidre", u: "u", kc: 95, pr: 0, un: "verre (25 cl)", kw: ["cidre"] },
@@ -151,7 +152,7 @@ const SLOTS = [
   { k: "soir", n: "Soir", share: 0.35, col: "b-lilac" },
   { k: "soiree", n: "Soirée", share: 0, col: "b-pink", extra: true }
 ];
-const PARTY_DRINKS = ["biere", "pinte", "vin", "champagne", "long_sucre", "long_zero", "cocktail", "shot", "cidre", "soda0"];
+const PARTY_DRINKS = ["biere", "pinte", "guinness", "vin", "champagne", "long_sucre", "long_zero", "cocktail", "shot", "cidre", "soda0"];
 const PRESETS = [
   { e: "🍝", n: "Pâtes sauce soja + steak", items: [{ k: "pates_cuit", por: 1 }, { k: "boeuf", por: 1, cook: 1 }, { k: "soja", cnt: 1 }] },
   { e: "🐟", n: "Poisson blanc + patates air fryer + haricots", items: [{ k: "poisson", por: 1, cook: 1 }, { k: "pdt_air", por: 1 }, { k: "haricots", por: 1 }] },
