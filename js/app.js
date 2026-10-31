@@ -481,7 +481,7 @@ function viewOnboarding() {
       <label class="field" for="o-c">Ce que Claude doit savoir sur toi (facultatif)<textarea id="o-c" placeholder="Ex. : on cuisine pour moi, souvent au beurre. Je ne pèse pas, sauf les pâtes. 3 séances de muscu par semaine."></textarea></label>
       <button class="btn hot" type="submit">C'est parti</button>
     </form>
-    <div class="card"><h3>Tu as déjà des données ?</h3><p class="small muted">Dans l'ancienne version (sur claude.ai), touche « Copier mes données » dans l'onglet Plan, puis colle-les ici.</p><div class="row"><button class="btn" data-act="import">Importer un fichier</button><button class="btn" data-act="cloud-restore">☁️ Restaurer ma sauvegarde en ligne</button></div></div>
+    <div class="card"><h3>Tu as déjà des données ?</h3><p class="small muted">Tu as utilisé l'app dans Safari ? Touche « Copier mes données » là-bas, puis « Coller » ici. Depuis l'ancienne version claude.ai : onglet Plan, « Copier mes données ».</p><button class="btn sun" data-act="transfer-paste">📋 Coller mes données de Safari</button><div class="row"><button class="btn" data-act="import">Importer un fichier</button><button class="btn" data-act="cloud-restore">☁️ Restaurer ma sauvegarde en ligne</button></div></div>
   </div>`;
 }
 
@@ -493,7 +493,13 @@ function viewJour() {
   const walk = D.walk || 0, wg = walkGoal(d);
   const st = streakInfo();
   const mon = mondayOf(d);
-  let h = `<section><div class="row between"><button class="round" data-act="week" data-v="-7" aria-label="Semaine précédente">‹</button><span class="mono muted">Semaine du ${fmtD(mon)}</span><button class="round" data-act="week" data-v="7" aria-label="Semaine suivante" ${addDays(mon, 7) > today() ? "disabled" : ""}>›</button></div>
+  let h = "";
+  let noBanner = false; try { noBanner = localStorage.getItem(LS + "-nobanner") === "1"; } catch (e) {}
+  if (IOS && !STANDALONE && !noBanner) h += `<section class="blk b-sky"><span class="mono">Tu es dans Safari</span>
+    <p class="small">Pour avoir l'app sur ton écran d'accueil <b>avec tes données</b> :</p>
+    <ol class="rlist" style="margin:0"><li>Touche <b>Copier mes données</b> ci-dessous.</li><li>••• → Partager → <b>Sur l'écran d'accueil</b> → Ajouter.</li><li>Ouvre l'app depuis l'icône et touche <b>Coller mes données de Safari</b>.</li></ol>
+    <div class="row"><button class="btn ink" data-act="transfer-copy">📋 Copier mes données</button><button class="btn small flat" data-act="transfer-hide">Masquer</button></div></section>`;
+  h += `<section><div class="row between"><button class="round" data-act="week" data-v="-7" aria-label="Semaine précédente">‹</button><span class="mono muted">Semaine du ${fmtD(mon)}</span><button class="round" data-act="week" data-v="7" aria-label="Semaine suivante" ${addDays(mon, 7) > today() ? "disabled" : ""}>›</button></div>
     <div class="week">${Array.from({ length: 7 }, (_, i) => {
       const dd = addDays(mon, i), fut = dd > today(), has = hasFood(dd), cls = has ? dayLight(dayTotals(dd).kcal) : "";
       return `<button class="wd ${cls}" data-act="pickday" data-d="${dd}" aria-pressed="${dd === d}" ${fut ? "disabled" : ""} aria-label="${JOURS_L[parseD(dd).getDay()]} ${parseD(dd).getDate()}${has ? ", " + f0(dayTotals(dd).kcal) + " kilocalories" : ""}"><span class="l">${"LMMJVSD"[i]}</span><span class="n">${parseD(dd).getDate()}</span><span class="s ${sessionOn(dd) ? "on" : ""}"></span></button>`;
@@ -1658,6 +1664,12 @@ async function cloudRestore(btn) {
 }
 
 /* ---------- Import / export ---------- */
+function showCopyBox(txt) {
+  openShell();
+  $("sheet").hidden = false;
+  $("sheet").innerHTML = sheetHTML({ title: "Copier mes données", id: "cp-title", enter: true, body: `<p class="small">Sélectionne tout le texte ci-dessous et copie-le, puis colle-le dans l'app installée.</p><textarea id="cp-text" readonly style="min-height:200px;font-family:var(--f-mono);font-size:11px">${esc(txt)}</textarea>`, foot: `<span></span><button class="btn hot" data-act="close-sheet">Fermer</button>` });
+  const t = $("cp-text"); t.focus(); t.select();
+}
 function openImport() {
   openShell();
   $("sheet").hidden = false;
@@ -1828,6 +1840,9 @@ document.addEventListener("click", e => {
     case "model": setModel(a.dataset.v); render(); break;
     case "coach": coach(); break;
     case "export": doExport(); break;
+    case "transfer-copy": { const txt = JSON.stringify(S); try { navigator.clipboard.writeText(txt).then(() => toast("✓ Copié. Installe l'app, puis touche « Coller mes données de Safari »"), () => showCopyBox(txt)); } catch (err) { showCopyBox(txt); } break; }
+    case "transfer-hide": try { localStorage.setItem(LS + "-nobanner", "1"); } catch (err) {} render(); break;
+    case "transfer-paste": (async () => { let txt = ""; try { txt = await navigator.clipboard.readText(); } catch (err) {} if (txt && txt.trim().startsWith("{")) doImport(txt); else { openImport(); toast("Colle le texte copié dans Safari, puis Importer"); } })(); break;
     case "health-paste": healthPaste(); break;
     case "health-apply": { const o = parseHealth($("hp-text").value); if (!o) { toast("Je ne trouve pas de données Santé dans ce texte"); break; } closeSheet(); applyHealth(o); break; }
     case "copy-health-url": { const u = SITE + "#sante?pas=[Pas]&exercice=[Minutes]&actif=[Énergie]&poids=[Poids]"; try { navigator.clipboard.writeText(u).then(() => toast("Adresse copiée"), () => toast("Sélectionne l'adresse pour la copier")); } catch (e) { toast("Sélectionne l'adresse pour la copier"); } break; }
