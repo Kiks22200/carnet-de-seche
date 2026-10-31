@@ -1,4 +1,5 @@
 import { ANATOMY } from "./anatomy.js";
+import { cloudCfg, setCloudCfg, pushBackup, pullBackup, findBackup, cloudError } from "./cloud.js";
 import { MODELS, getKey, setKey, getModel, setModel, hasKey, askJSON, askText, explain, blobToBase64 } from "./ai.js";
 
 /* ---------- Dates & formats ---------- */
@@ -150,7 +151,8 @@ const PRESETS = [
   { e: "☕", n: "Café au lait + 2 tartines", items: [{ k: "cafe_lait", cnt: 1 }, { k: "tartine", cnt: 2 }] },
   { e: "🥛", n: "Skyr + banane", items: [{ k: "skyr", cnt: 1 }, { k: "banane", cnt: 1 }] }
 ];
-const emojiFor = it => (FOOD[OLD_KEYS[it.k] || it.k] || {}).e || it.e || "🍽️";
+const cleanE = e => String(e || "").replace(/[<>&"'`=\\/]/g, "").slice(0, 8) || "🍽️";
+const emojiFor = it => cleanE((FOOD[OLD_KEYS[it.k] || it.k] || {}).e || it.e);
 
 /* ---------- Recettes ---------- */
 const GOALS = [["seche", "Sèche"], ["equilibre", "Équilibre"], ["masse", "Prise de masse"]];
@@ -253,7 +255,9 @@ function XM() {
   for (const [k, v] of Object.entries(c)) m[k] = { ...(EX[k] || {}), ...v };
   return (MEMO.ex = m);
 }
-function applyTplNames() { const c = S.profile.tplNames || {}; TPLS.forEach(t => { if (!t.n0) t.n0 = t.n; t.n = (c[t.k] || "").trim() || t.n0; }); }
+const cleanTxt = v => String(v || "").replace(/[<>&"'`]/g, "").trim();
+function applyTplNames() { const c = S.profile.tplNames || {}; TPLS.forEach(t => { if (!t.n0) t.n0 = t.n; t.n = cleanTxt(c[t.k]) || t.n0; }); }
+const tplOf = k => TPLS.find(t => t.k === k) || { k, n: "Séance", d: "", col: "b-sky" };
 const DEFAULT_PROGRAM = {
   dos: ["rowing_large", "tirage_uni_assis", "rowing_haltere", "shrugs", "hyperext", "tri_corde", "tri_nuque"],
   pecs: ["dc_halteres", "pec_deck", "incline_smith", "curl_incline", "curl_marteau"],
@@ -261,10 +265,15 @@ const DEFAULT_PROGRAM = {
 };
 
 /* ---------- État ---------- */
+// Pots connus, valeurs d'étiquette pour une dose
+const POWDER_PRESETS = [
+  { n: "ESN Designer Whey", g: 30, kcal: 112, prot: 22 },
+  { n: "Nutrimuscle Native Protein", g: 30, kcal: 110, prot: 22.5 }
+];
 const BLANK_PROFILE = {
   setup: false, sex: "h", heightCm: null, age: null, startKg: null, startDate: null, goalKg: null, goalDate: null,
   activity: 1.4, kcalManual: null, prot: null, auto: true, mode: "seche", program: null,
-  whey: { g: 30, kcal: 115, prot: 23 }, creaG: 5, tendon: false, context: "", v: 4
+  wheys: [{ id: "w1", n: "Whey", g: 30, kcal: 115, prot: 23 }], creaG: 5, tendon: false, context: "", v: 5
 };
 let S = { profile: { ...BLANK_PROFILE }, days: {}, sessions: {} };
 const UI = { tab: "jour", date: today(), month: today().slice(0, 7), activeSession: null, noResume: false, editProgram: false, region: null, goal: "seche", rfilter: "all", aiRecipes: [], aiBusy: false, aiErr: "", coach: "", coachBusy: false, lastToday: today() };
@@ -278,23 +287,32 @@ function loadLocal() {
     if (j && j.profile) S = { profile: { ...BLANK_PROFILE, v: 0, ...j.profile }, days: j.days || {}, sessions: j.sessions || {} };
   } catch (e) {}
 }
-function save() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { toast("Stockage plein : exporte tes données dans Réglages"); } }
+function save() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { toast("Stockage plein : exporte tes données dans Réglages"); } if (typeof scheduleCloud === "function" && S.profile.setup) scheduleCloud(); }
 function migrate() {
   const p = S.profile;
-  if ((p.v || 0) >= 4) return;
-  // Données venues de la version claude.ai
-  if (p.heightCm && p.startKg) p.setup = true;
-  if (p.activity === 1.45) p.activity = 1.4;
-  if (!p.whey) p.whey = { ...BLANK_PROFILE.whey };
-  if (p.creaG == null) p.creaG = 5;
-  if (p.auto == null) p.auto = true;
-  if (!p.mode) p.mode = "seche";
-  if (!p.sex) p.sex = "h";
-  if (p.tendon == null) p.tendon = Object.values(S.days).some(d => d.pain != null);
-  if (p.context == null) p.context = "";
-  delete p.v2; delete p.checked; delete p.u;
-  p.v = 4;
-  save();
+  if ((p.v || 0) < 4) {
+    // Données venues de la version claude.ai
+    if (p.heightCm && p.startKg && p.startDate && p.goalDate) p.setup = true;
+    if (p.activity === 1.45) p.activity = 1.4;
+    if (p.creaG == null) p.creaG = 5;
+    if (p.auto == null) p.auto = true;
+    if (!p.mode) p.mode = "seche";
+    if (!p.sex) p.sex = "h";
+    if (p.tendon == null) p.tendon = Object.values(S.days).some(d => d.pain != null);
+    if (p.context == null) p.context = "";
+    delete p.v2; delete p.checked; delete p.u;
+    p.v = 4;
+  }
+  if (p.v < 5) {
+    // Une seule whey → liste de poudres ; doses du jour rangées par pot
+    if (p.whey) p.wheys = [{ id: "w1", n: "Whey", g: 30, kcal: 115, prot: 23, ...p.whey }];
+    else if (!p.wheys || !p.wheys.length) p.wheys = [{ id: "w1", n: "Whey", g: 30, kcal: 115, prot: 23 }];
+    delete p.whey;
+    const first = p.wheys[0].id;
+    Object.values(S.days).forEach(D => { if (D.supp && D.supp.whey != null) { D.supp.p = { ...(D.supp.p || {}), [first]: ((D.supp.p || {})[first] || 0) + (+D.supp.whey || 0) }; delete D.supp.whey; } });
+    p.v = 5;
+    save();
+  }
 }
 const saveDay = d => { if (!S.days[d]) S.days[d] = day(d); S.days[d].u = Date.now(); save(); };
 const program = () => S.profile.program || DEFAULT_PROGRAM;
@@ -368,9 +386,16 @@ function kcalTarget() {
   return (MEMO.tgt = Math.max(S.profile.sex === "f" ? 1300 : 1600, round50(maintenance() - deficit())));
 }
 const itemTotals = items => items.reduce((a, it) => ({ kcal: a.kcal + (+it.kcal || 0), prot: a.prot + (+it.prot || 0) }), { kcal: 0, prot: 0 });
-const suppTotals = D => { const n = (D.supp && D.supp.whey) || 0, w = S.profile.whey; return { kcal: n * w.kcal, prot: n * w.prot }; };
+const powders = () => S.profile.wheys || [];
+const activePowders = () => powders().filter(w => !w.off);
+const dosesOf = (D, id) => (D && D.supp && D.supp.p && D.supp.p[id]) || 0;
+const totalDoses = D => powders().reduce((a, w) => a + dosesOf(D, w.id), 0);
+const suppTotals = D => powders().reduce((a, w) => { const n = dosesOf(D, w.id); return { kcal: a.kcal + n * w.kcal, prot: a.prot + n * w.prot }; }, { kcal: 0, prot: 0 });
+const sleepH = D => { const s2 = D && D.sleep; if (!s2 || !s2.bed || !s2.wake) return null; const m = t => { const [h, mi] = t.split(":").map(Number); return h * 60 + mi; }; let d = m(s2.wake) - m(s2.bed); if (d <= 0) d += 1440; return d / 60; };
+const fmtH = h => { const m = Math.round(h * 60); return Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0"); };
+const avgSleep = n => { const v = Array.from({ length: n }, (_, i) => sleepH(day(addDays(today(), -i)))).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 const dayTotals = d => { const D = day(d), a = itemTotals(D.meals.flatMap(m => m.items)), b = suppTotals(D); return { kcal: a.kcal + b.kcal, prot: a.prot + b.prot }; };
-const hasFood = d => { const D = S.days[d]; return !!D && (D.meals.some(m => m.items.length) || ((D.supp && D.supp.whey) || 0) > 0); };
+const hasFood = d => { const D = S.days[d]; return !!D && D.meals.some(m => m.items.length); };
 const lightFor = r => r <= 1.1 ? "ok" : r <= 1.4 ? "warn" : "over";
 const dayLight = kcal => { const t = kcalTarget(); return kcal <= t + 100 ? "ok" : kcal <= t + 400 ? "warn" : "over"; };
 function sessionsSorted() {
@@ -403,6 +428,12 @@ function painTrend() {
 const view = document.getElementById("view");
 const $ = id => document.getElementById(id);
 function render() {
+  try { renderInner(); }
+  catch (e) {
+    view.innerHTML = `<section class="card"><h3>Un souci d'affichage</h3><p class="small">${esc(e && e.message)}</p><p class="small muted">Tes données sont intactes. Exporte-les par sécurité, puis envoie-moi ce message.</p><div class="row"><button class="btn sun" data-act="export">Exporter mes données</button><button class="btn" data-act="go" data-tab="jour">Revenir au jour</button></div></section>`;
+  }
+}
+function renderInner() {
   fresh();
   applyTplNames();
   const setup = S.profile.setup;
@@ -450,7 +481,7 @@ function viewOnboarding() {
       <label class="field" for="o-c">Ce que Claude doit savoir sur toi (facultatif)<textarea id="o-c" placeholder="Ex. : on cuisine pour moi, souvent au beurre. Je ne pèse pas, sauf les pâtes. 3 séances de muscu par semaine."></textarea></label>
       <button class="btn hot" type="submit">C'est parti</button>
     </form>
-    <div class="card"><h3>Tu as déjà des données ?</h3><p class="small muted">Dans l'ancienne version (sur claude.ai), touche « Copier mes données » dans l'onglet Plan, puis colle-les ici.</p><button class="btn" data-act="import">Importer mes données</button></div>
+    <div class="card"><h3>Tu as déjà des données ?</h3><p class="small muted">Dans l'ancienne version (sur claude.ai), touche « Copier mes données » dans l'onglet Plan, puis colle-les ici.</p><div class="row"><button class="btn" data-act="import">Importer un fichier</button><button class="btn" data-act="cloud-restore">☁️ Restaurer ma sauvegarde en ligne</button></div></div>
   </div>`;
 }
 
@@ -494,7 +525,7 @@ function viewJour() {
 
   const tips = [], hr = new Date().getHours(), missP = p.prot - tot.prot;
   if (isToday && hr >= 14 && missP > 20 && hasFood(d)) {
-    const shaker = ((D.supp || {}).whey || 0) < 2, wp = p.whey.prot;
+    const shaker = activePowders().length > 0 && totalDoses(D) < 2, wp = activePowders().length ? activePowders()[0].prot : 23;
     const plan = missP <= 45 ? (shaker ? `Un shaker (${wp} g) et un skyr (15 g) font l'essentiel.` : "Un skyr (15 g) et une portion de thon ou de jambon (25 g) font l'essentiel.") : `Prévois une grosse portion de viande ou de poisson au prochain repas (40 à 50 g)${shaker ? `, un shaker (${wp} g)` : ""} et un skyr (15 g).`;
     tips.push(`<div class="blk b-lilac"><span class="mono">Protéines</span><p>Il te manque <b>${f0(missP)} g</b>. ${plan}</p></div>`);
   }
@@ -502,17 +533,22 @@ function viewJour() {
   if (isToday && p.tendon && (D.pain >= 5 || (pt != null && pt >= 1.5))) {
     tips.push(`<div class="note"><b>Ta blessure :</b> ${D.pain >= 5 ? "douleur à " + D.pain + "/10 aujourd'hui" : "la douleur monte depuis quelques jours"}. Remplace la marche par du vélo léger ou du repos, saute les exercices qui font mal et parles-en à ton médecin. Consulte vite en cas de claquement, de gonflement ou si tu ne peux plus pousser sur le pied ou tendre le genou.</div>`);
   }
+  const sl3 = avgSleep(3);
+  if (isToday && sl3 != null && sl3 < 6.5) tips.push(`<div class="blk b-sky"><span class="mono">Sommeil</span><p>Tu dors <b>${fmtH(sl3)}</b> en moyenne ces dernières nuits. Sous 7 h, la faim monte et tu perds plus de muscle : vise un coucher 30 min plus tôt ce soir.</p></div>`);
   const nDays = Object.keys(S.days).length, lastExp = p.lastExport;
   if (isToday && nDays >= 5 && (!lastExp || diffDays(lastExp, today()) >= 7)) tips.push(`<div class="card" style="gap:8px"><b>💾 Pense à ta sauvegarde</b><span class="small muted">Tes données sont sur ce téléphone. ${lastExp ? "Dernière sauvegarde le " + fmtD(lastExp) + "." : "Tu n'as encore jamais fait de sauvegarde."} Un fichier par semaine suffit.</span><button class="btn small sun" data-act="export">Sauvegarder maintenant</button></div>`);
   const wd = new Date().getDay();
   if (isToday && (wd === 0 || wd === 1) && !UI.coach && Object.keys(S.days).length >= 4) tips.push(`<button class="blk b-mint" data-act="go-coach" style="text-align:left"><span class="mono">Dimanche, jour de bilan</span><b style="font-family:var(--f-display);font-size:20px">Faire le bilan de la semaine →</b></button>`);
   if (tips.length) h += `<section>${tips.join("")}</section>`;
 
-  const sp = D.supp || {}, w = p.whey;
+  const sp = D.supp || {};
   h += `<section class="grid2">
-    <div class="card" style="gap:8px"><div class="row between"><b>💪 Whey</b><span class="mono muted">${w.g} g</span></div><span class="small muted">${w.kcal} kcal · ${w.prot} g prot.</span><div class="stepper" style="justify-self:start"><button data-act="whey" data-v="-1" aria-label="Retirer une dose">−</button><span class="v">${sp.whey || 0}</span><button data-act="whey" data-v="1" aria-label="Ajouter une dose">+</button></div></div>
-    <div class="card" style="gap:8px"><div class="row between"><b>⚡ Créatine</b><span class="mono muted">${p.creaG} g</span></div><span class="small muted">0 kcal, tous les jours</span><button class="toggle" data-act="crea" aria-pressed="${!!sp.crea}" aria-label="Créatine prise"></button></div>
+    ${activePowders().map(w => `<div class="card" style="gap:8px"><div class="row between" style="flex-wrap:nowrap"><b style="min-width:0">💪 ${esc(w.n)}</b><span class="mono muted">${fkg(w.g)} g</span></div><span class="small muted">${fkg(w.kcal)} kcal · ${fkg(w.prot)} g prot.</span><div class="stepper" style="justify-self:start"><button data-act="whey" data-w="${w.id}" data-v="-1" aria-label="Retirer une dose de ${esc(w.n)}">−</button><span class="v">${dosesOf(D, w.id)}</span><button data-act="whey" data-w="${w.id}" data-v="1" aria-label="Ajouter une dose de ${esc(w.n)}">+</button></div></div>`).join("")}
+    <div class="card" style="gap:8px"><div class="row between"><b>⚡ Créatine</b><span class="mono muted">${fkg(p.creaG)} g</span></div><span class="small muted">0 kcal, tous les jours</span><button class="toggle" data-act="crea" aria-pressed="${!!sp.crea}" aria-label="Créatine prise"></button></div>
   </section>`;
+  const sl = sleepH(D), sv = D.sleep || {};
+  h += `<section class="card" style="gap:10px"><div class="row between"><b>😴 Sommeil de la nuit</b><span class="tag ${sl == null ? "t-none" : sl >= 7 ? "t-ok" : sl >= 6 ? "t-warn" : "t-over"}">${sl == null ? "à noter" : fmtH(sl)}</span></div>
+    <div class="grid2"><label class="field" for="sl-bed">Couché à<input type="time" id="sl-bed" data-sleep="bed" value="${esc(sv.bed || "")}"></label><label class="field" for="sl-wake">Levé à<input type="time" id="sl-wake" data-sleep="wake" value="${esc(sv.wake || "")}"></label></div></section>`;
 
   h += `<section><h2>Journal du jour</h2>`;
   for (const s of SLOTS) {
@@ -525,7 +561,7 @@ function viewJour() {
 
   const sess = sessionOn(d);
   h += `<section class="card">
-    <div class="row between"><div><b>Séance</b><div class="small muted">${sess ? TPLS.find(t => t.k === sess.tpl).n + " faite" : "Pas de séance notée ce jour-là"}</div></div>${sess ? `<span class="tag t-ok">✓ Faite</span>` : isToday ? `<button class="btn small sun" data-act="go-corps">Commencer</button>` : ""}</div>
+    <div class="row between"><div><b>Séance</b><div class="small muted">${sess ? tplOf(sess.tpl).n + " faite" : "Pas de séance notée ce jour-là"}</div></div>${sess ? `<span class="tag t-ok">✓ Faite</span>` : isToday ? `<button class="btn small sun" data-act="go-corps">Commencer</button>` : ""}</div>
     ${p.tendon ? `<div role="group" aria-labelledby="pain-l"><b id="pain-l">Douleur à la blessure</b><div class="small muted" style="margin-bottom:8px">0 = rien, 10 = insupportable. Note-la le matin.</div><div class="pain">${Array.from({ length: 11 }, (_, i) => `<button data-act="pain" data-v="${i}" aria-pressed="${D.pain === i}" aria-label="Douleur ${i} sur 10">${i}</button>`).join("")}</div></div>` : ""}
     ${D.kg ? `<div class="small muted">Pesée : <b>${f1(D.kg)} kg</b></div>` : isToday ? `<div class="row between"><span class="small muted">Pas encore pesé aujourd'hui</span><button class="btn small" data-act="go-weigh">Me peser</button></div>` : ""}
   </section>`;
@@ -562,7 +598,7 @@ function viewJournal() {
     return `<button class="card dcard" data-act="openday" data-d="${d}">
       <div class="row between"><b style="font-family:var(--f-display);font-size:20px">${cap(JOURS_L[parseD(d).getDay()])} ${parseD(d).getDate()}</b><span class="tag t-${dayLight(t.kcal)}">${f0(t.kcal)} kcal</span></div>
       <div class="emrow" aria-hidden="true">${D.meals.flatMap(mm => mm.items).map(emojiFor).slice(0, 10).join("") || "💪"}</div>
-      <span class="small muted">${f0(t.prot)} g prot.${s ? " · " + TPLS.find(x => x.k === s.tpl).n : ""}${D.walk ? " · " + D.walk + " min de marche" : ""}${D.steps ? " · " + f0(D.steps) + " pas" : ""}${D.kg ? " · " + f1(D.kg) + " kg" : ""}</span>
+      <span class="small muted">${f0(t.prot)} g prot.${s ? " · " + tplOf(s.tpl).n : ""}${D.walk ? " · " + D.walk + " min de marche" : ""}${D.steps ? " · " + f0(D.steps) + " pas" : ""}${D.kg ? " · " + f1(D.kg) + " kg" : ""}</span>
     </button>`;
   }).join("") : `<div class="empty">Chaque jour où tu notes un repas apparaîtra ici, avec sa couleur, ce que tu as mangé et ta séance.</div>`}</section>`;
   return h;
@@ -616,7 +652,7 @@ function regionDetail(vals, ctx) {
 const emptyVol = () => Object.fromEntries(Object.keys(GROUPS).map(g => [g, 0]));
 function addVolume(vol, exList, onlyDone) {
   exList.forEach(e => {
-    const n = onlyDone ? e.sets.filter(x => +x.reps > 0).length : e.sets.length, ex = XM()[e.id];
+    const n = onlyDone ? e.sets.filter(isDone).length : e.sets.length, ex = XM()[e.id];
     if (!ex || !n) return;
     ex.pri.forEach(g => vol[g] += n); ex.sec.forEach(g => vol[g] += n * 0.5);
   });
@@ -630,12 +666,13 @@ function historyFor(exId, excludeId, max) {
   for (const s of sessionsSorted()) {
     if (s.id === excludeId || !s.done) continue;
     const e = (s.ex || []).find(x => x.id === exId);
-    if (e && e.sets.some(st => +st.reps > 0)) out.push({ date: s.date, sets: e.sets.filter(st => +st.reps > 0) });
+    if (e && e.sets.some(isDone)) out.push({ date: s.date, sets: e.sets.filter(isDone) });
     if (out.length >= (max || 5)) break;
   }
   return out;
 }
 const e1rm = st => (+st.kg || 0) * (1 + (+st.reps || 0) / 30);
+const isDone = st => +st.reps > 0 && (st.ok === undefined || st.ok === true);
 function bestE1RM(exId, excludeId) { let b = 0; historyFor(exId, excludeId, 999).forEach(h => h.sets.forEach(st => { b = Math.max(b, e1rm(st)); })); return b; }
 function targetFor(exId, excludeId) {
   const ex = XM()[exId], last = historyFor(exId, excludeId, 1)[0];
@@ -652,22 +689,22 @@ function startSession(tpl) {
     const last = historyFor(exId, id, 1)[0], e = XM()[exId] || {};
     const n = Math.max(3, last ? last.sets.length : 3);
     const kgAt = i => last ? last.sets[Math.min(i, last.sets.length - 1)].kg : (e.start != null ? e.start : "");
-    return { id: exId, sets: Array.from({ length: n }, (_, i) => ({ kg: kgAt(i), reps: "" })) };
+    return { id: exId, sets: Array.from({ length: n }, (_, i) => ({ kg: kgAt(i), reps: "", ok: false })) };
   });
   S.sessions[id] = { date: today(), t: new Date().toTimeString().slice(0, 5), tpl, done: false, tapis: false, abdos: false, ex };
   UI.activeSession = id; UI.noResume = false; UI.region = null;
   save(); render(); window.scrollTo(0, 0);
 }
-const openSession = () => sessionsSorted().find(s => !s.done && s.date === today());
+const openSession = () => sessionsSorted().find(s => !s.done);
 function viewCorps() {
   if (UI.activeSession && S.sessions[UI.activeSession]) return viewActiveSession(UI.activeSession);
   const pending = openSession();
-  if (pending && !UI.noResume) { UI.activeSession = pending.id; return viewActiveSession(pending.id); }
+  if (pending && !UI.noResume && pending.date === today()) { UI.activeSession = pending.id; return viewActiveSession(pending.id); }
   const nx = nextTpl(), lastBy = {};
   sessionsSorted().filter(s => s.done).forEach(s => { if (!lastBy[s.tpl]) lastBy[s.tpl] = s.date; });
   const vol = weekVolume();
   let h = "";
-  if (pending) h += `<section class="blk b-sun"><div class="row between"><div><b style="font-family:var(--f-display);font-size:20px">${TPLS.find(t => t.k === pending.tpl).n}</b><br><span class="small">En pause depuis ${pending.t || "ce matin"}</span></div><button class="btn ink" data-act="open-sess" data-id="${pending.id}">Reprendre</button></div></section>`;
+  if (pending) h += `<section class="blk b-sun"><div class="row between"><div><b style="font-family:var(--f-display);font-size:20px">${tplOf(pending.tpl).n}</b><br><span class="small">${pending.date === today() ? "En pause depuis " + (pending.t || "ce matin") : "Pas terminée, du " + fmtD(pending.date, true) + " : reprends-la pour la terminer"}</span></div><button class="btn ink" data-act="open-sess" data-id="${pending.id}">Reprendre</button></div></section>`;
   if (conva()) h += `<div class="note">Mode convalescence : reprends la muscu seulement avec l'accord de ton chirurgien, en commençant par le haut du corps.</div>`;
   h += `<section>${bodyStage(vol, "week", "Ta semaine")}</section>`;
   const low = Object.entries(vol).filter(([g, v]) => v > 0 && v < 8 && g !== "abs").map(([g]) => GROUPS[g].toLowerCase());
@@ -689,13 +726,13 @@ function viewCorps() {
   h += `</section>`;
   const done = sessionsSorted().filter(s => s.done).slice(0, 8);
   h += `<section><h2>Historique</h2>${done.length ? `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Séance</th><th>Séries</th><th>Records</th><th>Tonnage</th><th></th></tr></thead><tbody>${done.map(s => {
-    const sets = (s.ex || []).flatMap(e => e.sets.filter(x => +x.reps > 0)), ton = sets.reduce((a, x) => a + (+x.kg || 0) * (+x.reps || 0), 0), prs = sets.filter(x => x.pr).length;
-    return `<tr><td>${fmtD(s.date, true)}</td><td>${(TPLS.find(t => t.k === s.tpl) || {}).n || ""}</td><td>${sets.length}</td><td>${prs ? "🏅 " + prs : "—"}</td><td>${f0(ton)} kg</td><td><button class="btn small flat" data-act="open-sess" data-id="${s.id}">Voir</button></td></tr>`;
+    const sets = (s.ex || []).flatMap(e => e.sets.filter(isDone)), ton = sets.reduce((a, x) => a + (+x.kg || 0) * (+x.reps || 0), 0), prs = sets.filter(x => x.pr).length;
+    return `<tr><td>${fmtD(s.date, true)}</td><td>${tplOf(s.tpl).n || ""}</td><td>${sets.length}</td><td>${prs ? "🏅 " + prs : "—"}</td><td>${f0(ton)} kg</td><td><button class="btn small flat" data-act="open-sess" data-id="${s.id}">Voir</button></td></tr>`;
   }).join("")}</tbody></table></div>` : `<div class="empty">Tes séances terminées apparaîtront ici, avec le tonnage soulevé et tes records.</div>`}</section>`;
   return h;
 }
 function viewActiveSession(id) {
-  const s = S.sessions[id], tpl = TPLS.find(t => t.k === s.tpl);
+  const s = S.sessions[id], tpl = tplOf(s.tpl);
   let h = `<section class="blk ${tpl.col}"><div class="row between"><div><span class="mono">${s.done ? "Séance du " + fmtD(s.date, true) : "En cours"}</span><h2>${tpl.n}</h2></div><button class="btn small" data-act="leave-sess">${s.done ? "Retour" : "Pause"}</button></div></section>
     <section>${bodyStage(addVolume(emptyVol(), s.ex, false), "sess", "Muscles du jour")}</section>`;
   s.ex.forEach((e, ei) => {
@@ -713,7 +750,7 @@ function viewActiveSession(id) {
         <input type="number" inputmode="decimal" step="0.25" id="kg-${ei}-${si}" data-ei="${ei}" data-si="${si}" data-field="kg" value="${st.kg === "" || st.kg == null ? "" : st.kg}" aria-label="${esc(ex.n)}, charge série ${si + 1}">
         <input type="number" inputmode="numeric" id="rp-${ei}-${si}" data-ei="${ei}" data-si="${si}" data-field="reps" value="${st.reps}" placeholder="${pv ? pv.reps : ""}" aria-label="${esc(ex.n)}, répétitions série ${si + 1}">
         <span class="pv">${pv ? fkg(pv.kg) + "×" + pv.reps : "—"}</span>
-        <button class="ok ${st.pr ? "pr" : (st.ok === undefined ? +st.reps > 0 : st.ok) ? "done" : ""}" data-act="set-ok" data-ei="${ei}" data-si="${si}" aria-label="Série ${si + 1} faite">${st.pr ? "🏅" : "✓"}</button></div>`; }).join("")}
+        <button class="ok ${st.pr && isDone(st) ? "pr" : isDone(st) ? "done" : ""}" data-act="set-ok" data-ei="${ei}" data-si="${si}" aria-label="Série ${si + 1} faite">${st.pr ? "🏅" : "✓"}</button></div>`; }).join("")}
       <div class="row between"><button class="btn small flat" data-act="add-set" data-ei="${ei}">+ Série</button>${best ? `<span class="small muted">Record : ${f1(best)} kg (max estimé)</span>` : ""}</div>
       <details class="learn"><summary>Comprendre l'exercice</summary><p><b>Muscles :</b> ${esc(ex.mus)}</p><p>${esc(ex.why)}</p><p><b>Placement :</b> ${esc(ex.cue)}</p>${hist.length ? `<div class="hist"><b>Dernières fois</b>${hist.map(hh => `<span>${fmtD(hh.date)} · ${hh.sets.map(x => fkg(x.kg) + "×" + x.reps).join(", ")}</span>`).join("")}</div>` : ""}</details>
     </article>`;
@@ -729,7 +766,7 @@ function viewActiveSession(id) {
 function exSeries(id) {
   return sessionsSorted().filter(x => x.done).slice().reverse().map(x => {
     const e = (x.ex || []).find(y => y.id === id); if (!e) return null;
-    const sets = e.sets.filter(y => +y.reps > 0); if (!sets.length) return null;
+    const sets = e.sets.filter(isDone); if (!sets.length) return null;
     return { date: x.date, sid: x.id, sets, top: Math.max(...sets.map(y => +y.kg || 0)), best: Math.max(...sets.map(e1rm)), vol: sets.reduce((acc, y) => acc + (+y.kg || 0) * (+y.reps || 0), 0), reps: sets.reduce((acc, y) => acc + (+y.reps || 0), 0) };
   }).filter(Boolean);
 }
@@ -792,12 +829,12 @@ function openExStats(id) {
 function openSessionSummary(id) {
   const s = S.sessions[id]; if (!s) return;
   fresh();
-  const tpl = TPLS.find(t => t.k === s.tpl);
+  const tpl = tplOf(s.tpl);
   const prevSess = sessionsSorted().find(x => x.done && x.tpl === s.tpl && x.id !== id && (x.date + (x.t || "")) < (s.date + (s.t || "")));
-  const ton = x => (x.ex || []).flatMap(e => e.sets.filter(y => +y.reps > 0)).reduce((a, y) => a + (+y.kg || 0) * (+y.reps || 0), 0);
-  const all = s.ex.flatMap(e => e.sets.filter(y => +y.reps > 0)), prs = all.filter(y => y.pr).length;
+  const ton = x => (x.ex || []).flatMap(e => e.sets.filter(isDone)).reduce((a, y) => a + (+y.kg || 0) * (+y.reps || 0), 0);
+  const all = s.ex.flatMap(e => e.sets.filter(isDone)), prs = all.filter(y => y.pr).length;
   const rows = s.ex.map(e => {
-    const ex = XM()[e.id], sets = e.sets.filter(y => +y.reps > 0);
+    const ex = XM()[e.id], sets = e.sets.filter(isDone);
     if (!ex || !sets.length) return "";
     const prev = historyFor(e.id, id, 1)[0];
     const top = Math.max(...sets.map(y => +y.kg || 0)), reps = sets.reduce((a, y) => a + (+y.reps || 0), 0);
@@ -871,7 +908,7 @@ function renderExEditor() {
       <label class="field" for="x-cue">Placement<textarea id="x-cue">${esc(X.cue)}</textarea></label></details>
     <div class="row">${!X.isNew && X.tpl ? `<button class="btn small" data-act="x-remove">Retirer de la séance</button>` : ""}${isBase && isCustom ? `<button class="btn small flat" data-act="x-reset">Revenir à l'original</button>` : ""}</div>`;
   $("sheet").hidden = false;
-  $("sheet").innerHTML = sheetHTML({ title: X.isNew ? "Nouvel exercice" : "Modifier l'exercice", id: "x-title", enter: X.fresh, body, foot: `<span class="small muted">${X.tpl ? "Séance : " + esc((TPLS.find(t => t.k === X.tpl) || {}).n || "") : ""}</span><button class="btn hot" data-act="x-save">Enregistrer</button>` });
+  $("sheet").innerHTML = sheetHTML({ title: X.isNew ? "Nouvel exercice" : "Modifier l'exercice", id: "x-title", enter: X.fresh, body, foot: `<span class="small muted">${X.tpl ? "Séance : " + esc(tplOf(X.tpl).n || "") : ""}</span><button class="btn hot" data-act="x-save">Enregistrer</button>` });
   if (X.fresh) $("x-n").focus();
   X.fresh = false;
 }
@@ -926,6 +963,7 @@ function viewProgres() {
     <div class="card stat"><span class="mono muted">Poids tendance</span><span class="big">${f1(cur)}</span></div>
     <div class="card stat"><span class="mono muted">Depuis le départ</span><span class="big">${cur <= p.startKg ? "−" : "+"}${f1(Math.abs(p.startKg - cur))}</span></div>
     <div class="card stat"><span class="mono muted">Pas / jour (7 j)</span><span class="big">${(() => { const v = Array.from({ length: 7 }, (_, i) => day(addDays(today(), -i)).steps).filter(x => x != null); return v.length ? f0(v.reduce((a, b) => a + b, 0) / v.length) : "—"; })()}</span></div>
+    <div class="card stat"><span class="mono muted">Sommeil (7 j)</span><span class="big">${avgSleep(7) != null ? fmtH(avgSleep(7)) : "—"}</span></div>
     <div class="card stat"><span class="mono muted">Rythme / sem.</span><span class="big">${tr == null ? "—" : (tr > 0 ? "+" : "") + f1(tr)}</span></div>
     <div class="card stat"><span class="mono muted">Dépense ${adaptive().ready ? "mesurée" : "estimée"}</span><span class="big">${f0(round50(maintenance()))}</span></div>
   </section>${tr != null && tr < -1 && diffDays(p.startDate, today()) > 14 ? `<div class="note">Tu perds plus de 1 kg par semaine depuis la 3e semaine : c'est trop rapide pour garder ton muscle. Ajoute 150 à 200 kcal par jour.</div>` : ""}`;
@@ -997,9 +1035,10 @@ function weekTable() {
     const sess = sessionsSorted().filter(s => s.done && s.date >= ws && s.date <= we).length;
     const walk = ds.reduce((a, d) => a + (day(d).walk || 0), 0);
     const st = ds.map(d => day(d).steps).filter(v => v != null), stAvg = st.length ? st.reduce((a, b) => a + b, 0) / st.length : null;
-    rows.push(`<tr><td>${fmtD(ws)}</td><td>${tEnd ? f1(tEnd) : "—"}</td><td>${kcalAvg ? f0(kcalAvg) : "—"}</td><td>${logged.length ? inT + "/" + logged.length : "—"}</td><td>${sess}</td><td>${stAvg != null ? f0(stAvg) : "—"}</td><td>${walk ? f1(walk / 60) + " h" : "—"}</td></tr>`);
+    const sls = ds.map(d => sleepH(day(d))).filter(v => v != null), slAvg = sls.length ? sls.reduce((a, b) => a + b, 0) / sls.length : null;
+    rows.push(`<tr><td>${fmtD(ws)}</td><td>${tEnd ? f1(tEnd) : "—"}</td><td>${kcalAvg ? f0(kcalAvg) : "—"}</td><td>${logged.length ? inT + "/" + logged.length : "—"}</td><td>${sess}</td><td>${stAvg != null ? f0(stAvg) : "—"}</td><td>${slAvg != null ? fmtH(slAvg) : "—"}</td><td>${walk ? f1(walk / 60) + " h" : "—"}</td></tr>`);
   }
-  return `<section><h2>Semaine par semaine</h2><div class="tablewrap"><table><thead><tr><th>Semaine</th><th>Tendance</th><th>kcal/j</th><th>Cible</th><th>Séances</th><th>Pas/j</th><th>Marche</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></section>`;
+  return `<section><h2>Semaine par semaine</h2><div class="tablewrap"><table><thead><tr><th>Semaine</th><th>Tendance</th><th>kcal/j</th><th>Cible</th><th>Séances</th><th>Pas/j</th><th>Sommeil</th><th>Marche</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></section>`;
 }
 
 /* ---------- Recettes ---------- */
@@ -1062,7 +1101,7 @@ function eatRecipe(src, i) {
 
 /* ---------- Onglet Plan / Réglages ---------- */
 function viewPlan() {
-  const p = S.profile, tgt = kcalTarget(), m = maintenance(), w = p.whey, ad = adaptive();
+  const p = S.profile, tgt = kcalTarget(), m = maintenance(), ad = adaptive();
   const total = p.startKg - p.goalKg, weeks = diffDays(p.startDate, p.goalDate) / 7;
   const key = getKey();
   let h = `<section class="stats">
@@ -1091,11 +1130,12 @@ function viewPlan() {
       <label class="field" for="p-act">Activité (1,3 à 1,6)<input type="number" step="0.05" id="p-act" data-prof="activity" value="${p.activity}"></label>
       <label class="field" for="p-kcal">Cible kcal (vide = auto)<input type="number" id="p-kcal" data-prof="kcalManual" value="${p.kcalManual || ""}" placeholder="${tgt}"></label></div>
       <label class="field" for="p-ctx">Ce que Claude doit savoir sur toi<textarea id="p-ctx" data-ctx="1" placeholder="Ex. : on cuisine pour moi, souvent au beurre. Je ne pèse pas, sauf les pâtes. Problème de tendon, opération prévue.">${esc(p.context || "")}</textarea></label></section>
-    <section class="card"><h3>Ta whey et ta créatine</h3><p class="small muted">Valeurs de l'étiquette, pour une dose.</p><div class="fields">
-      <label class="field" for="w-g">Dose (g)<input type="number" id="w-g" data-whey="g" value="${w.g}"></label>
-      <label class="field" for="w-k">kcal / dose<input type="number" id="w-k" data-whey="kcal" value="${w.kcal}"></label>
-      <label class="field" for="w-p">Protéines / dose<input type="number" step="0.1" id="w-p" data-whey="prot" value="${w.prot}"></label>
-      <label class="field" for="w-c">Créatine (g/j)<input type="number" step="0.5" id="w-c" data-prof="creaG" value="${p.creaG}"></label></div></section>
+    <section class="card"><h3>Tes poudres et ta créatine</h3><p class="small muted">Valeurs de l'étiquette, pour une dose. Chaque pot a son compteur sur l'écran du jour.</p>
+      ${activePowders().map(w => `<div class="card" style="gap:8px;box-shadow:none;padding:12px"><div class="row between" style="flex-wrap:nowrap"><input type="text" id="pw-n-${w.id}" data-pw="${w.id}" data-f="n" value="${esc(w.n)}" aria-label="Nom du pot" style="flex:1;min-width:0;font-weight:700"><button class="x" data-act="pw-del" data-w="${w.id}" aria-label="Supprimer ${esc(w.n)}">×</button></div>
+        <div class="fields"><label class="field" for="pw-g-${w.id}">Dose (g)<input type="number" step="0.5" id="pw-g-${w.id}" data-pw="${w.id}" data-f="g" value="${w.g}"></label><label class="field" for="pw-k-${w.id}">kcal / dose<input type="number" id="pw-k-${w.id}" data-pw="${w.id}" data-f="kcal" value="${w.kcal}"></label><label class="field" for="pw-p-${w.id}">Protéines / dose<input type="number" step="0.1" id="pw-p-${w.id}" data-pw="${w.id}" data-f="prot" value="${w.prot}"></label></div></div>`).join("")}
+      ${activePowders().length < 4 ? `<div class="row">${POWDER_PRESETS.filter(x => !activePowders().some(w => w.n === x.n)).map((x, i) => `<button class="btn small" data-act="pw-add" data-i="${POWDER_PRESETS.indexOf(x)}">+ ${esc(x.n)}</button>`).join("")}<button class="btn small" data-act="pw-add" data-i="-1">+ Autre pot</button></div>` : ""}
+      <label class="field" for="w-c">Créatine (g/jour)<input type="number" step="0.5" id="w-c" data-prof="creaG" value="${p.creaG}"></label></section>
+    ${cloudHTML()}
     <section class="blk b-sun" id="bilan"><span class="mono">Bilan de la semaine</span><p class="small">Claude lit tes 7 derniers jours et te donne trois actions pour la semaine qui vient.</p>
       <button class="btn ink" data-act="coach" ${UI.coachBusy ? "disabled" : ""}>${UI.coachBusy ? `<span class="spin"></span> Analyse…` : "Faire le bilan"}</button>
       <div id="coach-out" style="white-space:pre-wrap;font-size:15px">${esc(UI.coach)}</div></section>`;
@@ -1107,7 +1147,7 @@ function viewPlan() {
   return h;
 }
 function guideHTML() {
-  const p = S.profile, w = p.whey;
+  const p = S.profile, w = activePowders()[0] || { prot: 23 };
   const art = (col, eyebrow, title, body) => `<article class="blk ${col}"><span class="mono">${eyebrow}</span><h3>${title}</h3>${body}</article>`;
   return `<section><h2>Ce qui fait la différence</h2>
     ${art("b-tomato", "Levier n° 1", "La portion de féculents", `<p>700 g de pâtes <b>cuites</b>, c'est environ 1 050 kcal, la moitié d'une journée. 700 g <b>crues</b>, c'est 2 500 kcal. Une portion de sportif, c'est 300 à 400 g cuits (125 à 170 g crus). Passer de 700 à 350 g cuits fait gagner environ 500 kcal à chaque fois, soit autour de 3 kg de gras en 7 semaines si c'est quotidien.</p><p>Pour ne pas avoir faim : un sachet de légumes surgelés (5 min au micro-ondes) et une vraie portion de viande ou de poisson.</p>`)}
@@ -1142,8 +1182,9 @@ function sheetHTML({ title, head = "", body, foot, enter, id = "sheet-title" }) 
 let C = null;
 const defaultSlot = () => { const hr = new Date().getHours(); return hr < 11 ? "matin" : hr < 15 ? "midi" : hr < 18 ? "gouter" : "soir"; };
 function openComposer(opts) {
+  const date = UI.date;
   if (!C) openShell();
-  C = { id: opts.id || null, slot: opts.slot || (UI.date === today() ? defaultSlot() : "midi"), items: opts.items ? opts.items.map(i => ({ fixed: true, ...i })) : [], mode: opts.mode || "pick", cat: "fec", search: opts.search || "", desc: opts.desc || "", photo: null, photoUrl: null, busy: false, err: "", tip: opts.tip || "", fresh: true };
+  C = { id: opts.id || null, date, slot: opts.slot || (UI.date === today() ? defaultSlot() : "midi"), items: opts.items ? opts.items.map(i => ({ fixed: true, ...i })) : [], mode: opts.mode || "pick", cat: "fec", search: opts.search || "", desc: opts.desc || "", photo: null, photoUrl: null, busy: false, err: "", tip: opts.tip || "", fresh: true };
   renderComposer();
 }
 function calcItem(ci) {
@@ -1223,7 +1264,7 @@ function renderComposer() {
   C.fresh = false;
 }
 function saveMeal() {
-  const d = UI.date;
+  const d = C.date || UI.date;
   if (!S.days[d]) S.days[d] = day(d);
   const items = C.items.map(calcItem).filter(i => i.kcal > 0 || i.prot > 0);
   const arr = S.days[d].meals, id = C.id || uid(), idx = arr.findIndex(m => m.id === id);
@@ -1305,7 +1346,7 @@ let R = null;
 async function runAnalysis(text, photo) {
   const slot = UI.date === today() ? defaultSlot() : "midi";
   openShell();
-  R = { busy: true, text, data: null, err: "", fresh: true };
+  R = { busy: true, text, data: null, err: "", fresh: true, date: UI.date };
   renderReview();
   const r = R;
   try {
@@ -1333,7 +1374,7 @@ function renderReview() {
     const extra = [];
     if (d.walk_min > 0) extra.push(["walk", `🚶 ${d.walk_min} min de marche ou vélo`]);
     if (d.weight_kg > 0) extra.push(["weight", `⚖️ Pesée : ${f1(d.weight_kg)} kg`]);
-    if (d.whey_doses > 0) extra.push(["whey", `💪 Whey × ${d.whey_doses}`]);
+    if (d.whey_doses > 0 && activePowders().length) extra.push(["whey", `💪 ${esc(activePowders()[0].n)} × ${d.whey_doses}`]);
     if (d.creatine) extra.push(["crea", "⚡ Créatine prise"]);
     if (d.pain >= 0) extra.push(["pain", `🩹 Douleur ${d.pain}/10`]);
     if (extra.length) body += `<div class="card" style="gap:8px">${extra.map(([key, label]) => `<div class="row between"><span>${label}</span><button class="toggle" data-act="rv-extra" data-k="${key}" aria-pressed="${!!k[key]}" aria-label="Enregistrer : ${esc(label)}"></button></div>`).join("")}</div>`;
@@ -1347,7 +1388,7 @@ function renderReview() {
   R.fresh = false;
 }
 function saveReview() {
-  const d = R.data, k = R.keep, date = UI.date;
+  const d = R.data, k = R.keep, date = R.date || UI.date;
   if (!S.days[date]) S.days[date] = day(date);
   const D = S.days[date];
   let n = 0;
@@ -1358,7 +1399,7 @@ function saveReview() {
   if (k.walk) D.walk = (D.walk || 0) + d.walk_min;
   if (k.weight) D.kg = d.weight_kg;
   if (k.whey || k.crea) D.supp = { ...(D.supp || {}) };
-  if (k.whey) D.supp.whey = (D.supp.whey || 0) + d.whey_doses;
+  if (k.whey && activePowders().length) { const id = activePowders()[0].id; D.supp.p = { ...(D.supp.p || {}), [id]: dosesOf(D, id) + d.whey_doses }; }
   if (k.crea) D.supp.crea = true;
   if (k.pain) D.pain = clamp(d.pain, 0, 10);
   saveDay(date); closeSheet(); UI.tab = "jour"; render();
@@ -1430,7 +1471,7 @@ function voiceDone() {
 /* ---------- Comment c'est calculé ---------- */
 function openHow() {
   fresh(); openShell();
-  const p = S.profile, kg = currentKg(), b = bmr(kg), ad = adaptive(), t = kcalTarget(), w = p.whey, act = String(activity()).replace(".", ",");
+  const p = S.profile, kg = currentKg(), b = bmr(kg), ad = adaptive(), t = kcalTarget(), act = String(activity()).replace(".", ",");
   const adaptTxt = ad.ready
     ? `<p>Après ${ad.days} jours, l'app compare ce que tu as noté (${f0(ad.intake)} kcal par jour en moyenne sur 14 jours) à l'évolution de ton poids tendance (${ad.dT <= 0 ? "−" : "+"}${f1(Math.abs(ad.dT))} kg). Elle en déduit ta dépense réelle : <b>${f0(ad.raw)} kcal</b>, mélangée à la formule à ${Math.round(ad.w * 100)} % pour l'instant.</p><div class="eq">Dépense retenue ≈ ${f0(ad.tdee)} kcal</div>`
     : ad.reason === "saisie" ? `<p>Pour mesurer ta dépense réelle, il faut au moins 10 jours notés sur les 14 derniers (${ad.logged} pour l'instant). En attendant, l'app garde la formule.</p>`
@@ -1443,7 +1484,7 @@ function openHow() {
     ${st(3, `<p><b>Ta dépense mesurée.</b></p>${adaptTxt}`)}
     ${st(4, `<p><b>Le déficit.</b> On retire ${deficit()} kcal par jour. 1 kg de gras vaut environ 7 700 kcal, donc ${deficit()} × 7 = ${f0(deficit() * 7)} kcal par semaine, soit environ ${f1(deficit() * 7 / KCAL_PER_KG)} kg de gras.</p><div class="eq">${f0(maintenance())} − ${deficit()} ≈ ${f0(t)} kcal${p.kcalManual ? " (réglée à la main)" : ""}</div>`)}
     ${st(5, `<p><b>Ce que tu manges.</b> Chaque aliment de la liste a une valeur de référence (Ciqual de l'ANSES, emballages). Portion × valeur = calories, et le beurre de cuisson s'ajoute. À la voix, en texte ou en photo, Claude fait le même travail et te montre la quantité estimée : tu peux corriger avant d'enregistrer.</p><div class="eq">1 madeleine ≈ 110 · 1 Kinder Joy ≈ 110 · 1 pêche ≈ 50</div>`)}
-    ${st(6, `<p><b>Tes compléments.</b> Une dose de whey de ${w.g} g compte pour ${w.kcal} kcal et ${w.prot} g de protéines. La créatine n'a pas de calories.</p>`)}
+    ${st(6, `<p><b>Tes compléments.</b> ${activePowders().length ? activePowders().map(w => `Une dose de ${esc(w.n)} (${fkg(w.g)} g) compte pour ${fkg(w.kcal)} kcal et ${fkg(w.prot)} g de protéines.`).join(" ") : "Aucune poudre réglée."} La créatine n'a pas de calories.</p>`)}
     ${st(7, `<p><b>La précision.</b> Un repas estimé à l'œil est juste à 15 ou 20 % près. Le juge, c'est ton poids tendance. Si la perte stagne deux semaines (hors première semaine), vérifie d'abord la saisie, puis retire 150 à 200 kcal ou ajoute 15 min de vélo.</p>`)}
   </div>`, foot: `<span class="small muted">Réglages dans l'onglet ⚙︎</span><button class="btn hot" data-act="close-sheet">Compris</button>` });
   $("sheet-close").focus();
@@ -1458,7 +1499,7 @@ async function coach() {
   const lines = [];
   for (let i = 6; i >= 0; i--) {
     const d = addDays(today(), -i), D = day(d), t = dayTotals(d), s = sessionOn(d);
-    lines.push(`${d} : ${hasFood(d) ? f0(t.kcal) + " kcal, " + f0(t.prot) + " g prot. (" + D.meals.map(m => m.slot + ": " + m.items.map(it => it.n + " " + (it.d || "")).join(" + ")).join(" | ") + (D.supp && D.supp.whey ? " | whey x" + D.supp.whey : "") + ")" : "repas non notés"} ; marche/vélo ${D.walk || 0} min ; poids ${D.kg || "—"}${S.profile.tendon ? " ; douleur " + (D.pain == null ? "—" : D.pain + "/10") : ""} ; séance : ${s ? TPLS.find(x => x.k === s.tpl).n : "aucune"}`);
+    lines.push(`${d} : ${hasFood(d) ? f0(t.kcal) + " kcal, " + f0(t.prot) + " g prot. (" + D.meals.map(m => m.slot + ": " + m.items.map(it => it.n + " " + (it.d || "")).join(" + ")).join(" | ") + (totalDoses(D) ? " | protéine en poudre x" + totalDoses(D) : "") + ")" : "repas non notés"} ; marche/vélo ${D.walk || 0} min ; pas ${D.steps != null ? D.steps : "—"} ; sommeil ${sleepH(D) != null ? fmtH(sleepH(D)) : "—"} ; poids ${D.kg || "—"}${S.profile.tendon ? " ; douleur " + (D.pain == null ? "—" : D.pain + "/10") : ""} ; séance : ${s ? tplOf(s.tpl).n : "aucune"}`);
   }
   const tr = trendPerWeek(), ad = adaptive();
   const prompt = `Voici mes 7 derniers jours. Poids tendance ${f1(currentKg())} kg, rythme ${tr == null ? "inconnu" : f1(tr) + " kg/semaine"}${ad.ready ? ", dépense mesurée " + f0(ad.raw) + " kcal/jour" : ""}${conva() ? ", je suis en convalescence" : ""}.
@@ -1529,6 +1570,93 @@ function healthHelpHTML() {
     <p class="small muted">Si tu utilises l'appli dans Safari plutôt qu'installée, remplace l'étape 6 par <b>Ouvrir les URL</b> : l'import se fait tout seul. Les calories actives sont affichées pour info mais ne s'ajoutent pas à ton budget : la montre les surestime souvent, et ta cible tient déjà compte de ton activité.</p></section>`;
 }
 
+/* ---------- Sauvegarde en ligne (gist secret chiffré) ---------- */
+let cloudTimer = null, cloudBusy = false;
+function scheduleCloud() {
+  const c = cloudCfg(); if (!c || !c.on) return;
+  clearTimeout(cloudTimer); cloudTimer = setTimeout(() => cloudPush(false), 20000);
+}
+async function cloudPush(manual) {
+  const c = cloudCfg(); if (!c || !c.on || cloudBusy) return;
+  clearTimeout(cloudTimer); cloudTimer = null; cloudBusy = true;
+  try {
+    const id = await pushBackup(c, S, { force: manual === "force" });
+    setCloudCfg({ ...cloudCfg(), gistId: id, last: new Date().toISOString(), err: "" });
+    if (manual) toast("☁️ Sauvegardé en ligne");
+  } catch (e) {
+    setCloudCfg({ ...cloudCfg(), err: cloudError(e), conflict: e && e.status === "conflict" });
+    if (manual) toast(cloudError(e));
+  }
+  cloudBusy = false;
+  if (UI.tab === "plan" && $("sheet").hidden) render();
+}
+function cloudHTML() {
+  const c = cloudCfg();
+  if (c && c.on) {
+    const last = c.last ? new Date(c.last) : null;
+    return `<section class="card"><h3>☁️ Sauvegarde en ligne</h3>
+      <p class="small"><span class="tag t-ok">Activée</span> ${last ? "Dernière sauvegarde le " + fmtD(iso(last)) + " à " + last.toTimeString().slice(0, 5) + "." : "Première sauvegarde en cours."}</p>
+      ${c.err ? `<div class="note">${esc(c.err)}${c.conflict ? `<div class="row" style="margin-top:8px"><button class="btn small" data-act="cloud-restore">Récupérer la plus récente</button><button class="btn small" data-act="cloud-force">Garder ce téléphone</button></div>` : ""}</div>` : ""}
+      <p class="small muted">Tes données sont chiffrées sur ce téléphone puis rangées dans un gist secret de ton compte GitHub, quelques secondes après chaque modification.</p>
+      <div class="row"><button class="btn small sun" data-act="cloud-now">Sauvegarder maintenant</button><button class="btn small" data-act="cloud-restore">Restaurer</button><button class="btn small flat" data-act="cloud-off">Désactiver</button></div></section>`;
+  }
+  return `<section class="card"><h3>☁️ Sauvegarde en ligne</h3>
+    <p class="small">Pour ne rien perdre si tu changes ou casses ton téléphone. Tes données sont <b>chiffrées sur ce téléphone</b> avec un code que toi seul connais, puis rangées dans un gist secret de ton compte GitHub.</p>
+    <details class="learn"><summary>Créer ton jeton GitHub (une fois, 2 min)</summary><ol class="rlist">
+      <li>Sur github.com, ouvre <b>Settings → Developer settings → Personal access tokens → Fine-grained tokens</b>, puis <b>Generate new token</b>.</li>
+      <li>Nom : « Carnet de sèche ». Durée : 1 an.</li>
+      <li>Dans <b>Account permissions</b>, mets <b>Gists</b> sur <b>Read and write</b>. Rien d'autre.</li>
+      <li><b>Generate token</b>, copie-le (il commence par github_pat_) et colle-le ci-dessous.</li></ol></details>
+    <label class="field" for="cl-token">Jeton GitHub<input id="cl-token" type="password" autocomplete="off" placeholder="github_pat_…"></label>
+    <label class="field" for="cl-pass">Code de sauvegarde (8 caractères minimum)<input id="cl-pass" type="password" autocomplete="new-password" placeholder="Une phrase que tu retiendras"></label>
+    <p class="small muted">Note ce code quelque part (Notes, gestionnaire de mots de passe) : sans lui, la sauvegarde est illisible, même pour toi.</p>
+    <div class="row"><button class="btn sun" data-act="cloud-on">Activer la sauvegarde</button><button class="btn small" data-act="cloud-restore">J'ai déjà une sauvegarde</button></div></section>`;
+}
+async function cloudEnable() {
+  const token = ($("cl-token") || {}).value.trim(), pass = ($("cl-pass") || {}).value;
+  if (!token) { toast("Colle ton jeton GitHub"); return; }
+  if (!pass || pass.length < 8) { toast("Choisis un code de 8 caractères minimum"); return; }
+  toast("☁️ Vérification…");
+  try {
+    const found = await findBackup({ token });
+    if (found) { setCloudCfg({ token, pass, gistId: found.id, last: null, on: false, err: "" }); openCloudRestore(found.at); return; }
+  } catch (e) { toast(cloudError(e)); return; }
+  setCloudCfg({ token, pass, gistId: null, last: null, on: true, err: "" });
+  await cloudPush(true);
+  render();
+}
+function openCloudRestore(foundAt) {
+  const c = cloudCfg() || {};
+  if (!$("sheet").hidden) closeSheet();
+  openShell();
+  $("sheet").hidden = false;
+  $("sheet").innerHTML = sheetHTML({ title: "Restaurer ma sauvegarde", id: "cr-title", enter: true, body: `<p class="small">Récupère tes données depuis ta sauvegarde en ligne. Ce qui est sur ce téléphone sera remplacé.</p>
+    <label class="field" for="cr-token">Jeton GitHub<input id="cr-token" type="password" autocomplete="off" value="${esc(c.token || "")}" placeholder="github_pat_…"></label>
+    <label class="field" for="cr-pass">Code de sauvegarde<input id="cr-pass" type="password" autocomplete="current-password" value="${esc(c.pass || "")}"></label>
+    ${typeof foundAt === "string" ? `<div class="note info">Une sauvegarde du ${fmtD(iso(new Date(foundAt)), true)} à ${new Date(foundAt).toTimeString().slice(0, 5)} existe déjà sur ce compte. Restaure-la, ou remplace-la par les données de ce téléphone.</div>` : ""}
+    <div id="cr-msg"></div>`, foot: `${typeof foundAt === "string" ? `<button class="btn" data-act="cloud-replace">Remplacer</button>` : `<span></span>`}<button class="btn hot" data-act="cloud-pull">Restaurer</button>` });
+  $("cr-token").focus();
+}
+async function cloudRestore(btn) {
+  const token = $("cr-token").value.trim(), pass = $("cr-pass").value, msg = $("cr-msg");
+  if (!token || !pass) { msg.innerHTML = `<div class="note">Remplis le jeton et le code.</div>`; return; }
+  btn.disabled = true; btn.innerHTML = `<span class="spin"></span>`;
+  try {
+    const old = cloudCfg() || {};
+    const r = await pullBackup({ token, pass, gistId: old.token === token ? old.gistId : null });
+    if (!r) { msg.innerHTML = `<div class="note">Aucune sauvegarde trouvée sur ce compte GitHub.</div>`; btn.disabled = false; btn.textContent = "Restaurer"; return; }
+    if (!r.data || !r.data.profile) throw new Error();
+    S = { profile: { ...BLANK_PROFILE, v: 0, ...r.data.profile }, days: r.data.days || {}, sessions: r.data.sessions || {} };
+    migrate(); save();
+    setCloudCfg({ token, pass, gistId: r.id, last: r.at, on: true, err: "" });
+    closeSheet(); UI.tab = "jour"; UI.date = today(); render();
+    toast(`Restauré : ${Object.keys(S.days).length} jours, ${Object.keys(S.sessions).length} séances`);
+  } catch (e) {
+    msg.innerHTML = `<div class="note">${esc(cloudError(e))}</div>`;
+    btn.disabled = false; btn.textContent = "Restaurer";
+  }
+}
+
 /* ---------- Import / export ---------- */
 function openImport() {
   openShell();
@@ -1544,8 +1672,12 @@ function doImport(txt) {
     if (!j || !j.profile) throw new Error();
     if (!j.days) {
       // Fichier de profil seul : il complète ce qui est déjà là sans effacer les repas ni les séances
-      S.profile = { ...BLANK_PROFILE, ...S.profile, ...j.profile, setup: true, v: 4 };
-      save(); closeSheet(); UI.tab = "jour"; UI.date = today(); render();
+      const jp = { ...j.profile };
+      if (S.profile.v >= 5 && powders().length) delete jp.whey;
+      S.profile = { ...BLANK_PROFILE, ...S.profile, ...jp, v: 4 };
+      S.profile.setup = !!(S.profile.heightCm && S.profile.age && S.profile.startKg && S.profile.startDate && S.profile.goalKg && S.profile.goalDate);
+      migrate(); save();
+      if (!S.profile.setup) toast("Profil importé : complète les infos qui manquent"); closeSheet(); UI.tab = "jour"; UI.date = today(); render();
       toast("Profil importé");
       return;
     }
@@ -1581,7 +1713,8 @@ document.addEventListener("submit", e => {
     const kg = parseFloat(g("o-w").replace(",", ".")), goal = parseFloat(g("o-g").replace(",", "."));
     if (!(goal < kg)) { toast("L'objectif doit être sous ton poids actuel"); return; }
     if (!(g("o-d") > today())) { toast("Choisis une date d'objectif dans le futur"); return; }
-    S.profile = { ...BLANK_PROFILE, setup: true, sex, heightCm: +g("o-h"), age: +g("o-a"), startKg: kg, startDate: today(), goalKg: goal, goalDate: g("o-d"), prot: round5(2 * goal), tendon: $("o-t").checked, context: g("o-c").trim() };
+    const keep = S.profile;
+    S.profile = { ...BLANK_PROFILE, ...keep, setup: true, sex, heightCm: +g("o-h"), age: +g("o-a"), startKg: kg, startDate: today(), goalKg: goal, goalDate: g("o-d"), prot: round5(2 * goal), tendon: $("o-t").checked || !!keep.tendon, context: g("o-c").trim() || keep.context || "" };
     S.days[today()] = { ...day(today()), kg, u: Date.now() };
     save(); render(); toast("C'est parti !");
   }
@@ -1613,7 +1746,16 @@ document.addEventListener("click", e => {
     case "add-photo": openComposer({ mode: "ai" }); { const inp = $("c-photo"); if (inp) inp.click(); } break;
     case "pick-photo": { const inp = $("c-photo"); if (inp) inp.click(); break; }
     case "edit-meal": { const m = day(UI.date).meals.find(x => x.id === a.dataset.id); if (m) openComposer({ id: m.id, slot: m.slot, items: m.items, tip: m.tip }); break; }
-    case "whey": { const d = D(); d.supp = { ...(d.supp || {}) }; d.supp.whey = clamp((d.supp.whey || 0) + +a.dataset.v, 0, 5); saveDay(UI.date); render(); break; }
+    case "whey": { const d = D(), id = a.dataset.w; d.supp = { ...(d.supp || {}) }; d.supp.p = { ...(d.supp.p || {}), [id]: clamp(dosesOf(d, id) + +a.dataset.v, 0, 6) }; saveDay(UI.date); render(); break; }
+    case "pw-add": { const pre = POWDER_PRESETS[+a.dataset.i] || { n: "Nouveau pot", g: 30, kcal: 115, prot: 23 }; S.profile.wheys = [...powders(), { id: "w" + uid(), ...pre }]; save(); render(); toast(pre.n + " ajouté"); break; }
+    case "pw-del": if (a.dataset.confirm) { S.profile.wheys = powders().map(w => w.id === a.dataset.w ? { ...w, off: true } : w); save(); render(); toast("Pot retiré (les jours passés restent comptés)"); } else { a.dataset.confirm = "1"; a.textContent = "?"; a.setAttribute("aria-label", "Confirmer la suppression"); toast("Touche encore pour supprimer ce pot"); } break;
+    case "cloud-on": cloudEnable(); break;
+    case "cloud-now": cloudPush(true); break;
+    case "cloud-off": setCloudCfg(null); render(); toast("Sauvegarde en ligne désactivée sur ce téléphone"); break;
+    case "cloud-restore": openCloudRestore(); break;
+    case "cloud-pull": cloudRestore(a); break;
+    case "cloud-force": cloudPush("force"); break;
+    case "cloud-replace": if (a.dataset.confirm) { setCloudCfg({ ...cloudCfg(), on: true }); closeSheet(); cloudPush("force"); } else { a.dataset.confirm = "1"; a.textContent = "Confirmer : remplacer"; } break;
     case "crea": { const d = D(); d.supp = { ...(d.supp || {}) }; d.supp.crea = !d.supp.crea; saveDay(UI.date); render(); break; }
     case "walk": { const d = D(); d.walk = clamp((d.walk || 0) + +a.dataset.v, 0, 300); saveDay(UI.date); render(); break; }
     case "pain": { const d = D(); const v = +a.dataset.v; d.pain = d.pain === v ? null : v; saveDay(UI.date); render(); break; }
@@ -1634,7 +1776,7 @@ document.addEventListener("click", e => {
     case "photo-del": if (C.photoUrl) URL.revokeObjectURL(C.photoUrl); C.photo = null; C.photoUrl = null; syncDesc(); renderComposer(); break;
     case "estimate": estimateInComposer(); break;
     case "save-meal": saveMeal(); break;
-    case "del-meal": if (a.dataset.confirm) { const d = D(); d.meals = d.meals.filter(m => m.id !== C.id); saveDay(UI.date); closeSheet(); render(); toast("Repas supprimé"); } else { a.dataset.confirm = "1"; a.textContent = "Confirmer"; } break;
+    case "del-meal": if (a.dataset.confirm) { const dd = C.date || UI.date, d = S.days[dd] || day(dd); d.meals = d.meals.filter(m => m.id !== C.id); S.days[dd] = d; saveDay(dd); closeSheet(); render(); toast("Repas supprimé"); } else { a.dataset.confirm = "1"; a.textContent = "Confirmer"; } break;
     case "rv-toggle": { const it = R.data.meals[+a.dataset.m].items[+a.dataset.i]; it.keep = !it.keep; renderReview(); break; }
     case "rv-extra": R.keep[a.dataset.k] = !R.keep[a.dataset.k]; renderReview(); break;
     case "rv-save": saveReview(); break;
@@ -1645,20 +1787,19 @@ document.addEventListener("click", e => {
     case "leave-sess": UI.activeSession = null; UI.noResume = true; UI.region = null; render(); window.scrollTo(0, 0); break;
     case "set-ok": {
       const s = S.sessions[UI.activeSession], e2 = s.ex[+a.dataset.ei], st = e2.sets[+a.dataset.si];
-      const validated = st.ok === undefined ? +st.reps > 0 && !$(`rp-${a.dataset.ei}-${a.dataset.si}`).dataset.fresh : st.ok;
-      if (validated) { st.ok = false; st.pr = false; }
+      if (isDone(st)) { st.ok = false; st.pr = false; }
       else {
         const inp = $(`rp-${a.dataset.ei}-${a.dataset.si}`), kg = $(`kg-${a.dataset.ei}-${a.dataset.si}`);
         st.reps = +(inp.value || inp.placeholder) || ""; st.kg = kg.value === "" ? "" : +kg.value;
         if (!st.reps) { toast("Écris le nombre de répétitions"); inp.focus(); break; }
         st.ok = true;
-        const prev = bestE1RM(e2.id, UI.activeSession), cur = e1rm(st), sessBest = Math.max(0, ...e2.sets.filter(x => x !== st && x.pr).map(e1rm));
+        const prev = bestE1RM(e2.id, UI.activeSession), cur = e1rm(st), sessBest = Math.max(0, ...e2.sets.filter(x => x !== st && x.pr && isDone(x)).map(e1rm));
         st.pr = prev > 0 && cur > prev && cur > sessBest;
         if (st.pr) toast("🏅 Record : " + XM()[e2.id].n.split(" (")[0] + ", " + fkg(st.kg) + " kg × " + st.reps);
       }
       s.u = Date.now(); save(); render(); break;
     }
-    case "add-set": { const e2 = S.sessions[UI.activeSession].ex[+a.dataset.ei], last = e2.sets[e2.sets.length - 1]; e2.sets.push({ kg: last ? last.kg : "", reps: "" }); save(); render(); break; }
+    case "add-set": { const e2 = S.sessions[UI.activeSession].ex[+a.dataset.ei], last = e2.sets[e2.sets.length - 1]; e2.sets.push({ kg: last ? last.kg : "", reps: "", ok: false }); save(); render(); break; }
     case "finish": { const fid = UI.activeSession, s = S.sessions[fid]; s.done = true; s.u = Date.now(); save(); UI.activeSession = null; UI.noResume = false; render(); window.scrollTo(0, 0); openSessionSummary(fid); break; }
     case "exstats": openExStats(a.dataset.id); break;
     case "del-sess": if (a.dataset.confirm) { delete S.sessions[UI.activeSession]; save(); UI.activeSession = null; UI.noResume = false; render(); toast("Séance supprimée"); } else { a.dataset.confirm = "1"; a.textContent = "Confirmer"; } break;
@@ -1747,17 +1888,20 @@ document.addEventListener("change", async e => {
   if (R && t.dataset.rm != null) { renderReview(); return; }
   if (t.dataset.ei != null && UI.activeSession) {
     const s = S.sessions[UI.activeSession], st = s.ex[+t.dataset.ei].sets[+t.dataset.si];
+    const wasDone = isDone(st);
     st[t.dataset.field] = t.value === "" ? "" : +t.value; s.u = Date.now();
-    if (t.dataset.field === "reps" && st.ok === undefined) st.ok = false;
+    st.ok = false; st.pr = false;
     save();
+    if (wasDone) { const b = t.parentElement.querySelector(".ok"); if (b) { b.className = "ok"; b.textContent = "✓"; } toast("Série modifiée : touche ✓ pour la revalider"); }
     return;
   }
   if (t.dataset.flag && UI.activeSession) { S.sessions[UI.activeSession][t.dataset.flag] = t.checked; save(); return; }
   if (t.dataset.addex && t.value) { const pr = JSON.parse(JSON.stringify(program())); pr[t.dataset.addex].push(t.value); S.profile.program = pr; save(); render(); return; }
-  if (t.dataset.whey) { if (t.value !== "" && +t.value >= 0) { S.profile.whey = { ...S.profile.whey, [t.dataset.whey]: +t.value }; save(); renderKeepFocus(); } return; }
+  if (t.dataset.pw) { const f = t.dataset.f, v = f === "n" ? t.value.trim() : +t.value; if (f === "n" ? v : t.value !== "" && v >= 0) { S.profile.wheys = powders().map(w => w.id === t.dataset.pw ? { ...w, [f]: v } : w); save(); renderKeepFocus(); } return; }
+  if (t.dataset.sleep) { const d = UI.date; if (!S.days[d]) S.days[d] = day(d); S.days[d].sleep = { ...(S.days[d].sleep || {}), [t.dataset.sleep]: t.value }; saveDay(d); renderKeepFocus(); return; }
   if (t.id === "x-demo" && X) { syncX(); renderExEditor(); return; }
   if (t.dataset.steps) { const d = UI.date; if (!S.days[d]) S.days[d] = day(d); S.days[d].steps = t.value === "" ? null : Math.max(0, Math.round(+t.value)); saveDay(d); toast(t.value === "" ? "Pas effacés" : "Pas enregistrés"); return; }
-  if (t.dataset.tplname) { S.profile.tplNames = { ...(S.profile.tplNames || {}), [t.dataset.tplname]: t.value.trim() }; save(); renderKeepFocus(); return; }
+  if (t.dataset.tplname) { S.profile.tplNames = { ...(S.profile.tplNames || {}), [t.dataset.tplname]: cleanTxt(t.value) }; save(); renderKeepFocus(); return; }
   if (t.dataset.ctx) { S.profile.context = t.value.trim(); save(); toast("Enregistré"); return; }
   if (t.dataset.prof) {
     const k = t.dataset.prof;
@@ -1782,7 +1926,7 @@ document.addEventListener("keydown", e => {
   }
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState !== "visible") return;
+  if (document.visibilityState !== "visible") { if (cloudTimer) cloudPush(false); return; }
   const t = today();
   if (t !== UI.lastToday) { if (UI.date === UI.lastToday) UI.date = t; UI.lastToday = t; UI.month = t.slice(0, 7); if ($("sheet").hidden) render(); }
 });
