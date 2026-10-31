@@ -88,7 +88,7 @@ const FOODS = [
   { k: "nutella", c: "dej", e: "🍫", n: "Pâte à tartiner", u: "u", kc: 80, pr: 1, un: "c. à soupe (15 g)", kw: ["nutella", "pate a tartiner"] },
 
   { k: "madeleine", c: "sna", e: "🧁", n: "Madeleine", u: "u", kc: 110, pr: 1.5, un: "madeleine (25 g)", kw: ["madeleine"] },
-  { k: "kinder_joy", c: "sna", e: "🥚", n: "Kinder Joy", u: "u", kc: 110, pr: 1.6, un: "œuf", kw: ["kinder joy"] },
+  { k: "kinder_joy", c: "sna", e: "🍫", n: "Kinder Joy / Kinder Surprise", u: "u", kc: 110, pr: 1.6, un: "œuf en chocolat (20 g)", kw: ["kinder joy", "kinder surprise"] },
   { k: "kinder_bueno", c: "sna", e: "🍫", n: "Kinder Bueno", u: "u", kc: 122, pr: 2, un: "barre (une des deux)", kw: ["bueno"] },
   { k: "pitch", c: "sna", e: "🍫", n: "Pitch / brioche fourrée", u: "u", kc: 145, pr: 3, un: "brioche", kw: ["pitch", "brioche"] },
   { k: "prince", c: "sna", e: "🍪", n: "Prince / biscuit fourré", u: "u", kc: 93, pr: 1.2, un: "biscuit double", kw: ["prince"] },
@@ -150,7 +150,7 @@ const PRESETS = [
   { e: "☕", n: "Café au lait + 2 tartines", items: [{ k: "cafe_lait", cnt: 1 }, { k: "tartine", cnt: 2 }] },
   { e: "🥛", n: "Skyr + banane", items: [{ k: "skyr", cnt: 1 }, { k: "banane", cnt: 1 }] }
 ];
-const emojiFor = it => it.e || (FOOD[OLD_KEYS[it.k] || it.k] || {}).e || "🍽️";
+const emojiFor = it => (FOOD[OLD_KEYS[it.k] || it.k] || {}).e || it.e || "🍽️";
 
 /* ---------- Recettes ---------- */
 const GOALS = [["seche", "Sèche"], ["equilibre", "Équilibre"], ["masse", "Prise de masse"]];
@@ -480,7 +480,8 @@ function viewJour() {
     <div class="blk b-sun"><span class="mono">Marche, vélo</span><div class="big" style="font-size:40px">${walk}<span style="font-size:18px"> / ${wg} min</span></div>
       <div class="stepper" style="justify-self:start"><button data-act="walk" data-v="-5" aria-label="Moins 5 minutes">−</button><span class="v">${walk}′</span><button data-act="walk" data-v="5" aria-label="Plus 5 minutes">+</button></div></div>
   </section>
-  <section class="card" style="gap:8px"><div class="row between"><div style="min-width:0;flex:1"><b>⌚ Apple Santé</b><div class="small muted">${D.steps != null ? `${f0(D.steps)} pas${D.activeKcal ? " · " + f0(D.activeKcal) + " kcal actives (pour info)" : ""}` : "Lance ton raccourci, puis touche Importer."}</div></div><button class="btn small" data-act="health-paste">Importer</button></div></section>`;
+  <section class="card" style="gap:10px"><div class="row between"><b>👟 Pas du jour</b><button class="btn small" data-act="health-paste">⌚ Importer de Santé</button></div>
+    <div class="row"><input type="number" inputmode="numeric" id="steps-in" data-steps="1" value="${D.steps != null ? D.steps : ""}" placeholder="Ex. 8 500" aria-label="Nombre de pas du jour" style="width:150px;font-family:var(--f-display);font-weight:800;font-size:22px"><span class="small muted">${D.activeKcal ? f0(D.activeKcal) + " kcal actives (pour info)" : "Écris-les, ou importe-les avec ton raccourci."}</span></div></section>`;
 
   h += `<section>
     <form class="quick" id="quick-form" autocomplete="off">
@@ -647,7 +648,13 @@ function targetFor(exId, excludeId) {
 function nextTpl() { const done = sessionsSorted().filter(s => s.done); if (!done.length) return "dos"; const i = TPLS.findIndex(t => t.k === done[0].tpl); return TPLS[(i + 1) % TPLS.length].k; }
 function startSession(tpl) {
   const id = uid();
-  S.sessions[id] = { date: today(), t: new Date().toTimeString().slice(0, 5), tpl, done: false, tapis: false, abdos: false, ex: program()[tpl].map(exId => { const t = targetFor(exId, id); return { id: exId, sets: [0, 1, 2].map(() => ({ kg: t.kg, reps: "" })) }; }) };
+  const ex = program()[tpl].map(exId => {
+    const last = historyFor(exId, id, 1)[0], e = XM()[exId] || {};
+    const n = Math.max(3, last ? last.sets.length : 3);
+    const kgAt = i => last ? last.sets[Math.min(i, last.sets.length - 1)].kg : (e.start != null ? e.start : "");
+    return { id: exId, sets: Array.from({ length: n }, (_, i) => ({ kg: kgAt(i), reps: "" })) };
+  });
+  S.sessions[id] = { date: today(), t: new Date().toTimeString().slice(0, 5), tpl, done: false, tapis: false, abdos: false, ex };
   UI.activeSession = id; UI.noResume = false; UI.region = null;
   save(); render(); window.scrollTo(0, 0);
 }
@@ -693,18 +700,20 @@ function viewActiveSession(id) {
     <section>${bodyStage(addVolume(emptyVol(), s.ex, false), "sess", "Muscles du jour")}</section>`;
   s.ex.forEach((e, ei) => {
     const ex = XM()[e.id]; if (!ex) return;
-    const t = targetFor(e.id, id), hist = historyFor(e.id, id), best = bestE1RM(e.id, id);
+    const hist = historyFor(e.id, id), prev = hist[0], best = bestE1RM(e.id, id);
+    const topReached = prev && prev.sets.length && prev.sets.every(x => +x.reps >= ex.rr[1]);
     h += `<article class="card">
       <div class="row between" style="flex-wrap:nowrap;align-items:flex-start"><div style="min-width:0"><h3>${esc(ex.n)}</h3><span class="small muted"><i>${esc(ex.alias)}</i></span></div><button class="round" style="width:36px;height:36px;box-shadow:none" data-act="ex-edit" data-id="${e.id}" data-t="${s.tpl}" aria-label="Modifier ${esc(ex.n)}">✎</button></div>
       <div class="mus">${ex.pri.map(g => `<span>${GROUPS[g]}</span>`).join("")}${ex.sec.map(g => `<span class="sec">${GROUPS[g]}</span>`).join("")}</div>
       ${demoKey(e.id) ? `<details class="learn"><summary>▶ Voir le mouvement</summary>${demoHTML(demoKey(e.id), ex.n)}</details>` : ""}
-      ${s.done ? "" : `<div class="target">Objectif : <b>${t.kg !== "" ? fkg(t.kg) + " kg" : "charge à trouver"} × ${t.reps}</b><br><span class="small">${esc(t.msg)}</span>${hist[0] ? `<br><span class="small muted">Dernière fois : ${hist[0].sets.map(x => fkg(x.kg) + "×" + x.reps).join(", ")}</span>` : ""}</div>`}
+      ${prev ? `<div class="target"><span class="mono muted">Séance précédente · ${fmtD(prev.date, true)}</span><br><b>${prev.sets.map(x => fkg(x.kg) + " × " + x.reps).join("   ·   ")}</b>${topReached && !s.done ? `<br><span class="small">Tu avais fait ${ex.rr[1]} reps ou plus sur toutes les séries.</span>` : ""}</div>` : s.done ? "" : `<div class="target small">Première fois ici : note ta charge et tes reps, elles serviront de repère la prochaine fois.</div>`}
       ${ex.tendon && S.profile.tendon ? `<div class="note small">Blessure : reste sous 3/10 de douleur pendant l'exercice, et celle du lendemain matin ne doit pas monter d'une semaine à l'autre. Les jambes se font avec l'accord de ton chirurgien.</div>` : ""}
-      <div class="sethead mono muted" aria-hidden="true"><span>#</span><span>kg</span><span>reps</span><span></span></div>
-      ${e.sets.map((st, si) => `<div class="set"><span class="n">${si + 1}</span>
+      <div class="sethead mono muted" aria-hidden="true"><span>#</span><span>kg</span><span>reps</span><span>avant</span><span></span></div>
+      ${e.sets.map((st, si) => { const pv = prev ? prev.sets[si] : null; return `<div class="set"><span class="n">${si + 1}</span>
         <input type="number" inputmode="decimal" step="0.25" id="kg-${ei}-${si}" data-ei="${ei}" data-si="${si}" data-field="kg" value="${st.kg === "" || st.kg == null ? "" : st.kg}" aria-label="${esc(ex.n)}, charge série ${si + 1}">
-        <input type="number" inputmode="numeric" id="rp-${ei}-${si}" data-ei="${ei}" data-si="${si}" data-field="reps" value="${st.reps}" placeholder="${t.reps}" aria-label="${esc(ex.n)}, répétitions série ${si + 1}">
-        <button class="ok ${st.pr ? "pr" : +st.reps > 0 ? "done" : ""}" data-act="set-ok" data-ei="${ei}" data-si="${si}" aria-label="Série ${si + 1} faite">${st.pr ? "🏅" : "✓"}</button></div>`).join("")}
+        <input type="number" inputmode="numeric" id="rp-${ei}-${si}" data-ei="${ei}" data-si="${si}" data-field="reps" value="${st.reps}" placeholder="${pv ? pv.reps : ""}" aria-label="${esc(ex.n)}, répétitions série ${si + 1}">
+        <span class="pv">${pv ? fkg(pv.kg) + "×" + pv.reps : "—"}</span>
+        <button class="ok ${st.pr ? "pr" : (st.ok === undefined ? +st.reps > 0 : st.ok) ? "done" : ""}" data-act="set-ok" data-ei="${ei}" data-si="${si}" aria-label="Série ${si + 1} faite">${st.pr ? "🏅" : "✓"}</button></div>`; }).join("")}
       <div class="row between"><button class="btn small flat" data-act="add-set" data-ei="${ei}">+ Série</button>${best ? `<span class="small muted">Record : ${f1(best)} kg (max estimé)</span>` : ""}</div>
       <details class="learn"><summary>Comprendre l'exercice</summary><p><b>Muscles :</b> ${esc(ex.mus)}</p><p>${esc(ex.why)}</p><p><b>Placement :</b> ${esc(ex.cue)}</p>${hist.length ? `<div class="hist"><b>Dernières fois</b>${hist.map(hh => `<span>${fmtD(hh.date)} · ${hh.sets.map(x => fkg(x.kg) + "×" + x.reps).join(", ")}</span>`).join("")}</div>` : ""}</details>
     </article>`;
@@ -714,6 +723,103 @@ function viewActiveSession(id) {
     ${s.tpl === "jambes" ? `<label class="row" for="abdos"><input type="checkbox" id="abdos" data-flag="abdos" ${s.abdos ? "checked" : ""}> Circuit abdos (5 à 10 min)</label>` : ""}
     <div class="row">${s.done ? `<button class="btn" data-act="del-sess">Supprimer la séance</button>` : `<button class="btn hot" data-act="finish">Terminer la séance</button><button class="btn" data-act="del-sess">Annuler</button>`}</div></section>`;
   return h;
+}
+
+/* ---------- Progression par exercice ---------- */
+function exSeries(id) {
+  return sessionsSorted().filter(x => x.done).slice().reverse().map(x => {
+    const e = (x.ex || []).find(y => y.id === id); if (!e) return null;
+    const sets = e.sets.filter(y => +y.reps > 0); if (!sets.length) return null;
+    return { date: x.date, sid: x.id, sets, top: Math.max(...sets.map(y => +y.kg || 0)), best: Math.max(...sets.map(e1rm)), vol: sets.reduce((acc, y) => acc + (+y.kg || 0) * (+y.reps || 0), 0), reps: sets.reduce((acc, y) => acc + (+y.reps || 0), 0) };
+  }).filter(Boolean);
+}
+function sparkSVG(vals) {
+  const W = 110, H = 34, P = 4;
+  if (vals.length < 2) return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"><circle cx="${W / 2}" cy="${H / 2}" r="4" fill="var(--sun)" stroke="var(--edge)" stroke-width="1.5"/></svg>`;
+  const lo = Math.min(...vals), hi = Math.max(...vals), r = hi - lo || 1;
+  const pts = vals.map((v, i) => [P + i * (W - 2 * P) / (vals.length - 1), H - P - (v - lo) / r * (H - 2 * P)]);
+  const last = pts[pts.length - 1];
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" aria-hidden="true"><polyline points="${pts.map(p => p.map(n => n.toFixed(1)).join(",")).join(" ")}" fill="none" stroke="var(--text)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${last[0]}" cy="${last[1]}" r="4.5" fill="var(--sun)" stroke="var(--edge)" stroke-width="1.5"/></svg>`;
+}
+function deltaTag(d, unit) { if (!d) return `<span class="tag t-none">=</span>`; return `<span class="tag ${d > 0 ? "t-ok" : "t-warn"}">${d > 0 ? "+" : "−"}${fkg(Math.abs(d))}${unit}</span>`; }
+function exercisesDashboard() {
+  const ids = [...new Set([...Object.values(program()).flat(), ...sessionsSorted().filter(x => x.done).flatMap(x => (x.ex || []).map(e => e.id))])];
+  const cards = ids.map(id => ({ id, ex: XM()[id], ser: exSeries(id) })).filter(o => o.ex && o.ser.length);
+  return `<section><h2>Tes exercices</h2>${cards.length ? `<p class="small muted">La courbe suit ton max estimé (charge et reps combinées). Touche un exercice pour voir tout son historique.</p>` + cards.map(({ id, ex, ser }) => {
+    const first = ser[0], last = ser[ser.length - 1], ls = last.sets.reduce((b, y) => e1rm(y) > e1rm(b) ? y : b, last.sets[0]);
+    return `<button class="card" data-act="exstats" data-id="${id}" style="text-align:left;grid-template-columns:1fr auto;align-items:center;gap:6px 12px">
+      <div style="display:grid;gap:4px;min-width:0"><b>${esc(ex.n)}</b><span class="small muted">Dernière : ${fkg(ls.kg)} kg × ${ls.reps} · ${fmtD(last.date)}</span>
+      <div class="row" style="gap:5px"><span class="tag t-none">${ser.length} séance${ser.length > 1 ? "s" : ""}</span>${ser.length > 1 ? deltaTag(last.top - first.top, " kg") : ""}</div></div>${sparkSVG(ser.map(x => x.best))}</button>`;
+  }).join("") : `<div class="empty">Termine ta première séance : chaque exercice aura ici sa courbe de progression.</div>`}</section>`;
+}
+function exChart(ser) {
+  const W = Math.min(480, Math.max(280, (view.clientWidth || 360) - 40)), H = Math.round(W * 0.55), L = 34, R = 10, T = 12, B = 24;
+  const vals = ser.flatMap(x => [x.top, x.best]), lo = Math.floor(Math.min(...vals) * 0.95), hi = Math.ceil(Math.max(...vals) * 1.05) || 1;
+  const n = ser.length, x = i => n === 1 ? (L + W - R) / 2 : L + i * (W - L - R) / (n - 1), y = v => T + (hi - v) / (hi - lo || 1) * (H - T - B);
+  let g = "";
+  const step = Math.max(1, Math.round((hi - lo) / 4));
+  for (let v = lo; v <= hi; v += step) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--soft)" stroke-width="1.5"/><text x="${L - 5}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+  const every = Math.max(1, Math.ceil(n / 5));
+  ser.forEach((s2, i) => { if (i % every === 0 || i === n - 1) g += `<text x="${x(i)}" y="${H - 6}" text-anchor="${n > 1 && i === n - 1 ? "end" : n > 1 && i === 0 ? "start" : "middle"}">${fmtD(s2.date)}</text>`; });
+  if (n > 1) {
+    g += `<polyline points="${ser.map((s2, i) => x(i) + "," + y(s2.best)).join(" ")}" fill="none" stroke="var(--cobalt)" stroke-width="2" stroke-dasharray="5 4"/>`;
+    g += `<polyline points="${ser.map((s2, i) => x(i) + "," + y(s2.top)).join(" ")}" fill="none" stroke="var(--text)" stroke-width="3" stroke-linejoin="round"/>`;
+  }
+  g += ser.map((s2, i) => `<circle cx="${x(i)}" cy="${y(s2.top)}" r="5" fill="var(--sun)" stroke="var(--edge)" stroke-width="2"/>`).join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Évolution de la charge par séance">${g}</svg>`;
+}
+function openExStats(id) {
+  const ex = XM()[id], ser = exSeries(id);
+  if (!ex || !ser.length) return;
+  const first = ser[0], last = ser[ser.length - 1];
+  const recordKg = Math.max(...ser.map(x => x.top)), recordBest = Math.max(...ser.map(x => x.best));
+  openShell();
+  $("sheet").hidden = false;
+  $("sheet").innerHTML = sheetHTML({ title: esc(ex.n), id: "exs-title", enter: true, body: `
+    <div class="stats">
+      <div class="blk b-sun stat"><span class="mono">Charge max</span><span class="big" style="font-size:30px">${fkg(recordKg)} kg</span></div>
+      <div class="blk b-cobalt stat"><span class="mono">Max estimé</span><span class="big" style="font-size:30px">${f1(recordBest)} kg</span></div>
+      <div class="blk b-mint stat"><span class="mono">Depuis le début</span><span class="big" style="font-size:30px">${last.top - first.top >= 0 ? "+" : "−"}${fkg(Math.abs(last.top - first.top))} kg</span></div>
+      <div class="blk b-lilac stat"><span class="mono">Séances</span><span class="big" style="font-size:30px">${ser.length}</span></div>
+    </div>
+    <div class="card">${exChart(ser)}<div class="row small muted" style="gap:12px"><span>● charge la plus lourde</span><span style="color:var(--cobalt)">- - max estimé</span></div></div>
+    <h3>Historique</h3>
+    <div class="tablewrap"><table><thead><tr><th>Date</th><th>Séries</th><th>Volume</th></tr></thead><tbody>${ser.slice().reverse().map(x => `<tr><td>${fmtD(x.date, true)}</td><td style="text-align:left;white-space:normal">${x.sets.map(y => `${fkg(y.kg)}×${y.reps}${y.pr ? " 🏅" : ""}`).join(", ")}</td><td>${f0(x.vol)} kg</td></tr>`).join("")}</tbody></table></div>
+    <p class="small muted">Le max estimé combine charge et répétitions (formule d'Epley) : il monte aussi quand tu fais plus de reps à la même charge.</p>`,
+    foot: `<span></span><button class="btn hot" data-act="close-sheet">Fermer</button>` });
+  $("sheet-close").focus();
+}
+function openSessionSummary(id) {
+  const s = S.sessions[id]; if (!s) return;
+  fresh();
+  const tpl = TPLS.find(t => t.k === s.tpl);
+  const prevSess = sessionsSorted().find(x => x.done && x.tpl === s.tpl && x.id !== id && (x.date + (x.t || "")) < (s.date + (s.t || "")));
+  const ton = x => (x.ex || []).flatMap(e => e.sets.filter(y => +y.reps > 0)).reduce((a, y) => a + (+y.kg || 0) * (+y.reps || 0), 0);
+  const all = s.ex.flatMap(e => e.sets.filter(y => +y.reps > 0)), prs = all.filter(y => y.pr).length;
+  const rows = s.ex.map(e => {
+    const ex = XM()[e.id], sets = e.sets.filter(y => +y.reps > 0);
+    if (!ex || !sets.length) return "";
+    const prev = historyFor(e.id, id, 1)[0];
+    const top = Math.max(...sets.map(y => +y.kg || 0)), reps = sets.reduce((a, y) => a + (+y.reps || 0), 0);
+    let tag = `<span class="tag t-blue">Première fois</span>`;
+    if (prev) {
+      const pTop = Math.max(...prev.sets.map(y => +y.kg || 0)), pReps = prev.sets.reduce((a, y) => a + (+y.reps || 0), 0);
+      tag = top !== pTop ? deltaTag(top - pTop, " kg") : deltaTag(reps - pReps, " rep" + (Math.abs(reps - pReps) > 1 ? "s" : ""));
+    }
+    return `<div class="row between" style="flex-wrap:nowrap;align-items:flex-start;gap:10px"><div style="min-width:0"><b>${esc(ex.n)}</b><div class="small muted">${sets.map(y => `${fkg(y.kg)}×${y.reps}${y.pr ? " 🏅" : ""}`).join(", ")}</div></div>${tag}</div>`;
+  }).join("");
+  const t1 = ton(s), t0 = prevSess ? ton(prevSess) : null;
+  openShell();
+  $("sheet").hidden = false;
+  $("sheet").innerHTML = sheetHTML({ title: "Séance terminée 💪", id: "sum-title", enter: true, body: `
+    <div class="blk ${tpl.col}"><span class="mono">${esc(tpl.n)} · ${fmtD(s.date, true)}</span>
+      <div class="row" style="gap:16px"><div><span class="big" style="font-size:40px">${all.length}</span><br><span class="small">séries</span></div><div><span class="big" style="font-size:40px">${f0(t1)}</span><br><span class="small">kg soulevés</span></div>${prs ? `<div><span class="big" style="font-size:40px">${prs}</span><br><span class="small">record${prs > 1 ? "s" : ""} 🏅</span></div>` : ""}</div>
+      ${t0 != null ? `<span class="small">${t1 >= t0 ? "+" : "−"}${f0(Math.abs(t1 - t0))} kg de volume par rapport à ta dernière séance ${esc(tpl.n.toLowerCase())}.</span>` : `<span class="small">Première séance enregistrée de ce type : c'est ta référence.</span>`}</div>
+    <h3>Par rapport à la dernière fois</h3>
+    <div class="card" style="gap:12px">${rows || `<span class="small muted">Aucune série notée.</span>`}</div>
+    <p class="small muted">Retrouve la courbe de chaque exercice dans l'onglet Progrès.</p>`,
+    foot: `<button class="btn" data-act="go" data-tab="progres">Voir ma progression</button><button class="btn hot" data-act="close-sheet">Fermer</button>` });
+  $("sheet-close").focus();
 }
 
 /* ---------- Démonstration d'un exercice ---------- */
@@ -819,11 +925,13 @@ function viewProgres() {
   h += `<section class="stats">
     <div class="card stat"><span class="mono muted">Poids tendance</span><span class="big">${f1(cur)}</span></div>
     <div class="card stat"><span class="mono muted">Depuis le départ</span><span class="big">${cur <= p.startKg ? "−" : "+"}${f1(Math.abs(p.startKg - cur))}</span></div>
+    <div class="card stat"><span class="mono muted">Pas / jour (7 j)</span><span class="big">${(() => { const v = Array.from({ length: 7 }, (_, i) => day(addDays(today(), -i)).steps).filter(x => x != null); return v.length ? f0(v.reduce((a, b) => a + b, 0) / v.length) : "—"; })()}</span></div>
     <div class="card stat"><span class="mono muted">Rythme / sem.</span><span class="big">${tr == null ? "—" : (tr > 0 ? "+" : "") + f1(tr)}</span></div>
     <div class="card stat"><span class="mono muted">Dépense ${adaptive().ready ? "mesurée" : "estimée"}</span><span class="big">${f0(round50(maintenance()))}</span></div>
   </section>${tr != null && tr < -1 && diffDays(p.startDate, today()) > 14 ? `<div class="note">Tu perds plus de 1 kg par semaine depuis la 3e semaine : c'est trop rapide pour garder ton muscle. Ajoute 150 à 200 kcal par jour.</div>` : ""}`;
   h += `<section class="card"><h3>Couloir vers ${f1(p.goalKg)} kg</h3>${weightChart(w)}<div class="row small muted" style="gap:12px"><span>● tendance</span><span style="color:var(--mint)">● dans le couloir</span><span style="color:var(--tomato)">● au-dessus</span></div></section>`;
   h += `<section class="card"><h3>Calories, 14 jours</h3>${kcalChart()}<span class="small muted">Le trait marque ta cible de ${f0(kcalTarget())} kcal.</span></section>`;
+  h += exercisesDashboard();
   h += weekTable();
   return h;
 }
@@ -888,9 +996,10 @@ function weekTable() {
     const tEnd = trendAt(we > today() ? today() : we);
     const sess = sessionsSorted().filter(s => s.done && s.date >= ws && s.date <= we).length;
     const walk = ds.reduce((a, d) => a + (day(d).walk || 0), 0);
-    rows.push(`<tr><td>${fmtD(ws)}</td><td>${tEnd ? f1(tEnd) : "—"}</td><td>${kcalAvg ? f0(kcalAvg) : "—"}</td><td>${logged.length ? inT + "/" + logged.length : "—"}</td><td>${sess}</td><td>${walk ? f1(walk / 60) + " h" : "—"}</td></tr>`);
+    const st = ds.map(d => day(d).steps).filter(v => v != null), stAvg = st.length ? st.reduce((a, b) => a + b, 0) / st.length : null;
+    rows.push(`<tr><td>${fmtD(ws)}</td><td>${tEnd ? f1(tEnd) : "—"}</td><td>${kcalAvg ? f0(kcalAvg) : "—"}</td><td>${logged.length ? inT + "/" + logged.length : "—"}</td><td>${sess}</td><td>${stAvg != null ? f0(stAvg) : "—"}</td><td>${walk ? f1(walk / 60) + " h" : "—"}</td></tr>`);
   }
-  return `<section><h2>Semaine par semaine</h2><div class="tablewrap"><table><thead><tr><th>Semaine</th><th>Tendance</th><th>kcal/j</th><th>Cible</th><th>Séances</th><th>Marche</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></section>`;
+  return `<section><h2>Semaine par semaine</h2><div class="tablewrap"><table><thead><tr><th>Semaine</th><th>Tendance</th><th>kcal/j</th><th>Cible</th><th>Séances</th><th>Pas/j</th><th>Marche</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></section>`;
 }
 
 /* ---------- Recettes ---------- */
@@ -1486,7 +1595,7 @@ document.addEventListener("click", e => {
   if (act === "sheet-back" && (e.target !== a || SH.down !== a)) return;
   const D = () => { if (!S.days[UI.date]) S.days[UI.date] = day(UI.date); return S.days[UI.date]; };
   switch (act) {
-    case "go": goTab(a.dataset.tab); break;
+    case "go": if (!$("sheet").hidden) closeSheet(); goTab(a.dataset.tab); break;
     case "onb-sex": ["h", "f"].forEach(x => $("sex-" + x).setAttribute("aria-pressed", String(x === a.dataset.v))); break;
     case "week": { const n = addDays(UI.date, +a.dataset.v); UI.date = n > today() ? today() : n; render(); break; }
     case "pickday": UI.date = a.dataset.d; render(); break;
@@ -1536,10 +1645,13 @@ document.addEventListener("click", e => {
     case "leave-sess": UI.activeSession = null; UI.noResume = true; UI.region = null; render(); window.scrollTo(0, 0); break;
     case "set-ok": {
       const s = S.sessions[UI.activeSession], e2 = s.ex[+a.dataset.ei], st = e2.sets[+a.dataset.si];
-      if (+st.reps > 0) { st.reps = ""; st.pr = false; }
+      const validated = st.ok === undefined ? +st.reps > 0 && !$(`rp-${a.dataset.ei}-${a.dataset.si}`).dataset.fresh : st.ok;
+      if (validated) { st.ok = false; st.pr = false; }
       else {
         const inp = $(`rp-${a.dataset.ei}-${a.dataset.si}`), kg = $(`kg-${a.dataset.ei}-${a.dataset.si}`);
         st.reps = +(inp.value || inp.placeholder) || ""; st.kg = kg.value === "" ? "" : +kg.value;
+        if (!st.reps) { toast("Écris le nombre de répétitions"); inp.focus(); break; }
+        st.ok = true;
         const prev = bestE1RM(e2.id, UI.activeSession), cur = e1rm(st), sessBest = Math.max(0, ...e2.sets.filter(x => x !== st && x.pr).map(e1rm));
         st.pr = prev > 0 && cur > prev && cur > sessBest;
         if (st.pr) toast("🏅 Record : " + XM()[e2.id].n.split(" (")[0] + ", " + fkg(st.kg) + " kg × " + st.reps);
@@ -1547,7 +1659,8 @@ document.addEventListener("click", e => {
       s.u = Date.now(); save(); render(); break;
     }
     case "add-set": { const e2 = S.sessions[UI.activeSession].ex[+a.dataset.ei], last = e2.sets[e2.sets.length - 1]; e2.sets.push({ kg: last ? last.kg : "", reps: "" }); save(); render(); break; }
-    case "finish": { const s = S.sessions[UI.activeSession]; s.done = true; save(); const all = s.ex.flatMap(e2 => e2.sets.filter(st => +st.reps > 0)), prs = all.filter(st => st.pr).length; UI.activeSession = null; UI.noResume = false; render(); window.scrollTo(0, 0); toast("Séance enregistrée · " + all.length + " séries" + (prs ? " · " + prs + " record" + (prs > 1 ? "s" : "") + " 🏅" : "")); break; }
+    case "finish": { const fid = UI.activeSession, s = S.sessions[fid]; s.done = true; s.u = Date.now(); save(); UI.activeSession = null; UI.noResume = false; render(); window.scrollTo(0, 0); openSessionSummary(fid); break; }
+    case "exstats": openExStats(a.dataset.id); break;
     case "del-sess": if (a.dataset.confirm) { delete S.sessions[UI.activeSession]; save(); UI.activeSession = null; UI.noResume = false; render(); toast("Séance supprimée"); } else { a.dataset.confirm = "1"; a.textContent = "Confirmer"; } break;
     case "edit-prog": UI.editProgram = !UI.editProgram; render(); break;
     case "rm-ex": { const pr = JSON.parse(JSON.stringify(program())); pr[a.dataset.t].splice(+a.dataset.i, 1); S.profile.program = pr; save(); render(); break; }
@@ -1634,14 +1747,16 @@ document.addEventListener("change", async e => {
   if (R && t.dataset.rm != null) { renderReview(); return; }
   if (t.dataset.ei != null && UI.activeSession) {
     const s = S.sessions[UI.activeSession], st = s.ex[+t.dataset.ei].sets[+t.dataset.si];
-    st[t.dataset.field] = t.value === "" ? "" : +t.value; s.u = Date.now(); save();
-    if (t.dataset.field === "reps") { const b = t.parentElement.querySelector(".ok"); if (b) b.classList.toggle("done", +t.value > 0); }
+    st[t.dataset.field] = t.value === "" ? "" : +t.value; s.u = Date.now();
+    if (t.dataset.field === "reps" && st.ok === undefined) st.ok = false;
+    save();
     return;
   }
   if (t.dataset.flag && UI.activeSession) { S.sessions[UI.activeSession][t.dataset.flag] = t.checked; save(); return; }
   if (t.dataset.addex && t.value) { const pr = JSON.parse(JSON.stringify(program())); pr[t.dataset.addex].push(t.value); S.profile.program = pr; save(); render(); return; }
   if (t.dataset.whey) { if (t.value !== "" && +t.value >= 0) { S.profile.whey = { ...S.profile.whey, [t.dataset.whey]: +t.value }; save(); renderKeepFocus(); } return; }
   if (t.id === "x-demo" && X) { syncX(); renderExEditor(); return; }
+  if (t.dataset.steps) { const d = UI.date; if (!S.days[d]) S.days[d] = day(d); S.days[d].steps = t.value === "" ? null : Math.max(0, Math.round(+t.value)); saveDay(d); toast(t.value === "" ? "Pas effacés" : "Pas enregistrés"); return; }
   if (t.dataset.tplname) { S.profile.tplNames = { ...(S.profile.tplNames || {}), [t.dataset.tplname]: t.value.trim() }; save(); renderKeepFocus(); return; }
   if (t.dataset.ctx) { S.profile.context = t.value.trim(); save(); toast("Enregistré"); return; }
   if (t.dataset.prof) {
