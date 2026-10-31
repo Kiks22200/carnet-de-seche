@@ -3,10 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "vendor": "esbuild vendor-src/anthropic-entry.js --bundle --format=esm --minify --platform=browser --outfile=vendor/anthropic.mjs"
+    "vendor": "esbuild vendor-src/anthropic-entry.js --bundle --format=esm --minify --platform=browser --outfile=vendor/anthropic.mjs && esbuild vendor-src/zxing-entry.js --bundle --format=esm --minify --platform=browser --outfile=vendor/zxing.mjs"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "0.135.0",
+    "@zxing/library": "^0.23.0",
     "esbuild": "0.25.10"
   }
 }

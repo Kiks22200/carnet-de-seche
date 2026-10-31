@@ -230,6 +230,35 @@ label.field { display: grid; gap: 5px; font-size: 13px; font-weight: 700; }
 .thumb { position: relative; width: 60px; height: 44px; flex: none; padding: 0; border: 2px solid var(--edge); border-radius: 10px; overflow: hidden; background: #000; }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .85; }
 .thumb span { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 16px; text-shadow: 0 1px 3px #000; }
+/* Récap animé, annuler, gestes */
+.toast-undo { margin-left: 10px; background: var(--sun); color: var(--block-ink); border: 0; border-radius: 999px; padding: 5px 12px; font-weight: 800; font-size: 14px; }
+#story { position: fixed; inset: 0; z-index: 35; background: var(--block-ink); display: grid; padding: calc(env(safe-area-inset-top) + 14px) max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+#story[hidden] { display: none; }
+.story-bars { position: absolute; top: calc(env(safe-area-inset-top) + 10px); left: 16px; right: 16px; display: flex; gap: 4px; z-index: 3; }
+.story-bars i { flex: 1; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .3); }
+.story-bars i.done { background: #fff; }
+.story-bars i.on { background: var(--sun); }
+.story-x { position: absolute; top: calc(env(safe-area-inset-top) + 22px); right: 16px; z-index: 4; width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .35); color: #fff; font-size: 18px; }
+.story-slide { border: 3px solid #000; border-radius: 28px; margin-top: 78px; padding: 28px 22px; display: grid; align-content: center; gap: 14px; color: var(--block-ink); box-shadow: 6px 6px 0 #000; animation: storyIn .35s cubic-bezier(.2, .9, .3, 1.2); position: relative; z-index: 2; }
+.story-slide.b-cobalt { color: #fff; }
+@keyframes storyIn { from { transform: scale(.92) rotate(-1.5deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.story-em { font-size: 64px; line-height: 1; }
+.story-big { font-family: var(--f-display); font-weight: 800; font-size: clamp(56px, 18vw, 92px); line-height: .9; letter-spacing: -.03em; }
+.story-line { font-size: 19px; line-height: 1.35; font-weight: 600; }
+.story-nav { position: absolute; top: 0; bottom: 0; width: 35%; border: 0; background: transparent; z-index: 1; }
+.story-nav.prev { left: 0; } .story-nav.next { right: 0; width: 65%; }
+.story-slide .btn { position: relative; z-index: 3; justify-self: start; }
+.stage-seg { background: transparent; border-color: #000; }
+.stage-seg button { color: #F4F0FF; padding: 6px 10px; min-height: 34px; font-size: 12px; }
+.stage-seg button + button { border-left-color: #000; }
+.set .ok.pop { animation: pop .35s cubic-bezier(.2, .9, .3, 1.6); }
+@keyframes pop { 0% { transform: scale(.7); } 60% { transform: scale(1.18); } 100% { transform: none; } }
+main.slide-l { animation: slideL .28s ease-out; } main.slide-r { animation: slideR .28s ease-out; }
+@keyframes slideL { from { transform: translateX(36px); opacity: .4; } to { transform: none; opacity: 1; } }
+@keyframes slideR { from { transform: translateX(-36px); opacity: .4; } to { transform: none; opacity: 1; } }
+.sheet { touch-action: pan-y; }
+.sh-head::before { content: ""; display: block; width: 44px; height: 5px; border-radius: 5px; background: var(--muted); opacity: .5; margin: -6px auto -4px; }
+
 @media (prefers-reduced-motion: reduce) { .demo { padding-top: 33.333%; } .demo img { width: 50%; } .demo img:nth-child(2) { left: 50%; } .demo img:nth-child(2) { animation: none; opacity: 1; } }
 details.learn summary { cursor: pointer; font-weight: 700; color: var(--cobalt); min-height: 36px; display: flex; align-items: center; list-style: none; }
 @media (prefers-color-scheme: dark) { details.learn summary { color: var(--sky); } }
@@ -330,6 +359,7 @@ tr:last-child td { border-bottom: 0; }
 </div>
 <div id="sheet" hidden></div>
 <div id="listen" hidden></div>
+<div id="story" role="dialog" aria-modal="true" aria-label="Récap de la semaine" hidden></div>
 <div id="toast" role="status" aria-live="polite" hidden></div>
 <script type="module" src="js/app.js"></script>
 </body>
