@@ -21,6 +21,8 @@ const fkg = v => (Math.round(v * 100) / 100).toLocaleString("fr-FR", { maximumFr
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+// Accorde le premier mot d'une unité (« carré » ↔ « carrés »)
+const plural = (un, many) => { const [w, ...rest] = un.split(" "); const v = many ? (/[sx]$/.test(w) || !w ? w : w + "s") : (/[^s][sx]$/.test(w) ? w.slice(0, -1) : w); return [v, ...rest].join(" "); };
 const norm = s => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const round50 = v => Math.round(v / 50) * 50;
 const round5 = v => Math.round(v / 5) * 5;
@@ -301,7 +303,7 @@ function loadLocal() {
     if (j && j.profile) S = { profile: { ...BLANK_PROFILE, v: 0, ...j.profile }, days: j.days || {}, sessions: j.sessions || {} };
   } catch (e) {}
 }
-function save() { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { toast("Stockage plein : exporte tes données dans Réglages"); } if (typeof scheduleCloud === "function" && S.profile.setup) scheduleCloud(); }
+function save() { if (UNDO && Date.now() - UNDO_AT > 400) dropUndo(); try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) { toast("Stockage plein : exporte tes données dans Réglages"); } if (typeof scheduleCloud === "function" && S.profile.setup) scheduleCloud(); }
 function migrate() {
   const p = S.profile;
   if ((p.v || 0) < 4) {
@@ -484,7 +486,10 @@ function renderTop() {
   $("kgchip").innerHTML = `${f1(currentKg())}<small>${lost > 0.05 ? "−" + f1(lost) : "kg"}</small>`;
 }
 let UNDO = null;
-const snapshot = () => { UNDO = JSON.stringify(S); };
+let UNDO_AT = 0;
+const snapshot = () => { UNDO = JSON.stringify(S); UNDO_AT = Date.now(); };
+// Toute autre modification après l'action rend « Annuler » caduc (sinon il effacerait aussi ce qui a suivi)
+function dropUndo() { if (!UNDO) return; UNDO = null; const b = document.querySelector(".toast-undo"); if (b) b.remove(); }
 function toast(msg, undo) {
   const t = $("toast");
   t.innerHTML = esc(msg) + (undo && UNDO ? ` <button class="toast-undo" data-act="undo">Annuler</button>` : "");
@@ -1149,7 +1154,8 @@ function recapSlides(ws) {
 function openRecap(ws) {
   STORY = { slides: recapSlides(ws), i: 0 };
   S.profile.recapSeen = ws; save();
-  const el = $("story"); el.hidden = false; document.body.classList.add("lock");
+  STORY.opener = document.activeElement;
+  const el = $("story"); el.hidden = false; document.body.classList.add("lock"); $("app").inert = true;
   storyRender();
 }
 function storyRender() {
@@ -1158,9 +1164,14 @@ function storyRender() {
     <button class="story-x" data-act="story-close" aria-label="Fermer">✕</button>
     ${STORY.slides[STORY.i]}
     <button class="story-nav prev" data-act="story-prev" aria-label="Précédent"></button><button class="story-nav next" data-act="story-next" aria-label="Suivant"></button>`;
+  if (!$("story").contains(document.activeElement)) $("story").querySelector(".story-x").focus({ preventScroll: true });
 }
-function storyGo(d) { if (!STORY) return; const n = STORY.i + d; if (n < 0) return; if (n >= STORY.slides.length) { closeStory(); return; } STORY.i = n; storyRender(); }
-function closeStory() { STORY = null; const el = $("story"); el.hidden = true; el.innerHTML = ""; if ($("sheet").hidden) document.body.classList.remove("lock"); render(); }
+function storyGo(d) { if (!STORY) return; const n = STORY.i + d; if (n < 0) return; if (n >= STORY.slides.length) { closeStory(); return; } STORY.i = n; storyRender(); const b = $("story").querySelector(d > 0 ? ".story-nav.next" : ".story-nav.prev"); if (b) b.focus({ preventScroll: true }); }
+function closeStory() {
+  const op = STORY && STORY.opener; STORY = null; const el = $("story"); el.hidden = true; el.innerHTML = "";
+  if ($("sheet").hidden) { document.body.classList.remove("lock"); $("app").inert = false; }
+  render(); const back = op && op.dataset && op.dataset.act ? view.querySelector(`[data-act="${op.dataset.act}"]`) : null; if (back) back.focus();
+}
 
 /* ---------- Soirée ---------- */
 const partyMeal = D => D.meals.find(m => m.party);
@@ -1320,7 +1331,7 @@ function guideHTML() {
 
 /* ---------- Feuilles ---------- */
 const SH = { opener: null, down: null };
-function openShell() { SH.opener = document.activeElement; $("app").inert = true; document.body.classList.add("lock"); }
+function openShell() { dropUndo(); SH.opener = document.activeElement; $("app").inert = true; document.body.classList.add("lock"); }
 function closeSheet() {
   const s = $("sheet"); s.hidden = true; s.innerHTML = "";
   if (C && C.photoUrl) URL.revokeObjectURL(C.photoUrl);
@@ -1348,7 +1359,7 @@ function calcItem(ci) {
   const f = FOOD[ci.k];
   let kcal, prot, d, factor;
   if (f.u === "g") { const g = ci.por === "g" ? (+ci.g || 0) : f.p[ci.por]; kcal = f.kc * g / 100; prot = f.pr * g / 100; factor = g / f.p[1]; d = (ci.por === "g" ? "" : PORTIONS[ci.por] + " · ") + "≈ " + g + " g"; }
-  else { kcal = f.kc * ci.cnt; prot = f.pr * ci.cnt; factor = ci.cnt * 0.5; d = fkg(ci.cnt) + " " + f.un; }
+  else { kcal = f.kc * ci.cnt; prot = f.pr * ci.cnt; factor = ci.cnt * 0.5; d = fkg(ci.cnt) + " " + plural(f.un, ci.cnt > 1); }
   if (f.ck && ci.cook) { kcal += COOK[ci.cook].kc * factor; d += " · " + COOK[ci.cook].n.toLowerCase(); }
   return { n: f.n, kcal: Math.round(kcal), prot: Math.round(prot * 10) / 10, d, k: f.k, e: f.e };
 }
@@ -1434,6 +1445,7 @@ function saveMeal() {
   snapshot();
   const d = C.date || UI.date;
   if (!S.days[d]) S.days[d] = day(d);
+  learnItems(C.items.filter(i => i.fixed && i.lk && !i.k).map(i => ({ n: i.n, e: i.e, kcal: +i.kcal, prot: +i.prot, qty: i.qty, q: i.d, lk: i.lk, src: i.src })));
   const items = C.items.map(calcItem).filter(i => i.kcal > 0 || i.prot > 0);
   const arr = S.days[d].meals, id = C.id || uid(), idx = arr.findIndex(m => m.id === id);
   if (!items.length) { if (idx >= 0) arr.splice(idx, 1); saveDay(d); closeSheet(); render(); toast("Repas vide, rien d'enregistré"); return; }
@@ -1483,7 +1495,9 @@ async function decodeBarcode(file) {
         if ("BarcodeDetector" in window) {
           try { const r = await new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e"] }).detect(cv); if (r[0]) return r[0].rawValue; } catch (e) {}
         }
-        try { const { decodeRGBA } = await import("../vendor/zxing.mjs"); return decodeRGBA(ctx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height); } catch (e) {}
+        let decodeRGBA;
+        try { ({ decodeRGBA } = await import("../vendor/zxing.mjs")); } catch (e) { const er = new Error("offline"); er.offline = true; throw er; }
+        try { return decodeRGBA(ctx.getImageData(0, 0, cv.width, cv.height).data, cv.width, cv.height); } catch (e) {}
       }
     }
     return null;
@@ -1497,13 +1511,16 @@ async function lookupProduct(code) {
   const p = d.product, n = p.nutriments || {};
   const kcal100 = n["energy-kcal_100g"] != null ? +n["energy-kcal_100g"] : n.energy_100g != null ? +n.energy_100g / 4.184 : null;
   if (kcal100 == null || isNaN(kcal100)) return null;
-  return { code, name: cleanTxt(p.product_name_fr || p.product_name || "Produit " + code), brand: cleanTxt((p.brands || "").split(",")[0]), kcal100, prot100: +n.proteins_100g || 0, servQ: +p.serving_quantity || 0, servS: cleanTxt(p.serving_size || "") };
+  const txt = v => String(v || "").replace(/[\u0000-\u001f]/g, "").trim().slice(0, 120);
+  return { code, name: txt(p.product_name_fr || p.product_name) || "Produit " + code, brand: txt((p.brands || "").split(",")[0]), kcal100, prot100: +n.proteins_100g || 0, servQ: +p.serving_quantity || 0, servS: cleanTxt(p.serving_size || "") };
 }
 async function scanFromFile(file) {
   if (!C) openComposer({ mode: "scan" });
   const c = C; c.mode = "scan"; c.scan = { state: "reading" }; renderComposer();
-  const code = await decodeBarcode(file).catch(() => null);
+  let offline = false;
+  const code = await decodeBarcode(file).catch(e => { offline = !!(e && e.offline); return null; });
   if (C !== c) return;
+  if (offline) { c.scan = { state: "notfound", err: "Pas de connexion pour lire le code." }; renderComposer(); return; }
   if (!code) { c.scan = { state: "nocode" }; renderComposer(); return; }
   await scanLookup(code);
 }
@@ -1544,7 +1561,8 @@ function scanAdd() {
     : { k, c: "mine", e: "📦", n: p.name + (p.brand && !norm(p.name).includes(norm(p.brand)) ? " (" + p.brand + ")" : ""), u: "g", kc: Math.round(p.kcal100), pr: Math.round(p.prot100 * 10) / 10, p: [50, 100, 150], code: p.code };
   S.profile.foods = { ...(S.profile.foods || {}), [k]: food };
   FOOD[k] = food; save();
-  const it = food.u === "u" ? newItem(k, { cnt: sc.unit === "serv" ? sc.qty : Math.max(0.5, Math.round(sc.qty / p.servQ * 2) / 2) }) : { ...newItem(k), por: "g", g: sc.qty };
+  const r = scanKcal(sc);
+  const it = food.u === "g" ? { ...newItem(k), por: "g", g: sc.qty } : sc.unit === "serv" ? newItem(k, { cnt: sc.qty }) : { fixed: true, k, e: "📦", n: food.n, d: fkg(r.g) + " g", kcal: r.kcal, prot: r.prot };
   C.items.push(it); C.scan = null; C.mode = "pick"; renderComposer();
   toast("📦 " + food.n + " ajouté");
 }
@@ -1573,7 +1591,7 @@ Règles :
 - Alcool : une bière = demi de 25 cl sauf si « pinte » ; compte le soda des mélanges (rhum coca…). Ne juge pas, donne les calories.
 - conseil : une phrase concrète et bienveillante en français pour faire mieux la prochaine fois, ou "" si tout va bien.
 - Ne invente rien qui n'est pas dit ou visible.
-- Constance : un même aliment doit toujours compter pareil. Si un aliment correspond à une ligne des listes ci-dessous, mets sa clé dans ref et dans qty le nombre d'unités (ou les grammes quand l'unité est « g »). Ses calories seront calculées par l'app, ne les réinvente pas. Choisis la ligne la plus précise (« chocolat noir » plutôt que « chocolat »). Sinon ref = "" et qty = nombre d'unités dites (1 par défaut), avec tes estimations dans kcal et prot pour la quantité totale.
+- Constance : un même aliment doit toujours compter pareil. Si un aliment correspond à une ligne des listes ci-dessous, mets sa clé dans ref et dans qty le nombre d'unités (ou les grammes quand l'unité est « g »). Ses calories seront calculées par l'app, ne les réinvente pas. Choisis la ligne la plus précise (« chocolat noir » plutôt que « chocolat »). Sinon ref = "" et qty = nombre d'unités dites (1 par défaut). Dans tous les cas, mets dans kcal et prot ton estimation pour la quantité totale : elle sert de contrôle.
 Aliments déjà notés par lui (clé | nom | kcal par unité) :
 ${learnedList() || "(aucun pour l'instant)"}
 Liste de l'app (clé | nom | unité | kcal) :
@@ -1584,28 +1602,30 @@ const learned = () => S.profile.learned || {};
 function learnedList() {
   return Object.entries(learned()).sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, 150).map(([k, v]) => `m:${k} | ${v.n} | ${v.kc}${v.un ? " par " + v.un : ""}`).join("\n");
 }
-// Accorde le premier mot d'une unité (« carré » ↔ « carrés »)
-const plural = (un, many) => { const [w, ...rest] = un.split(" "); const v = many ? (/[sx]$/.test(w) || !w ? w : w + "s") : (/[^s][sx]$/.test(w) ? w.slice(0, -1) : w); return [v, ...rest].join(" "); };
 const learnKey = n => norm(n).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 // Recalcule un aliment rendu par Claude à partir de la liste ou de la mémoire
 function settleItem(it) {
   const qty = +it.qty > 0 ? +it.qty : 1;
   const ref = String(it.ref || "");
   // Une valeur déjà notée (ou corrigée à la main) passe avant la liste
+  // Garde-fou : si la valeur recalculée s'écarte de plus de 2,5 fois de l'estimation de Claude, c'est une confusion d'unité
+  // (« une assiette » mémorisée, « 200 g » dit aujourd'hui) : on garde alors l'estimation
+  const sane = v => +it.kcal > 0 ? v <= +it.kcal * 2.5 && v >= +it.kcal / 2.5 : v >= 5 && v <= 2000;
   const mk = ref.startsWith("m:") ? ref.slice(2) : learnKey(it.n), m = learned()[mk];
-  if (m) return { ...it, n: m.n, e: m.e || it.e, qty, kcal: Math.round(m.kc * qty), prot: Math.round(m.pr * qty * 10) / 10, q: fkg(qty) + (m.un ? " " + plural(m.un, qty > 1) : ""), lk: mk, src: "memo" };
+  if (m && sane(m.kc * qty)) return { ...it, n: m.n, e: m.e || it.e, qty, kcal: Math.round(m.kc * qty), prot: Math.round(m.pr * qty * 10) / 10, q: fkg(qty) + (m.un ? " " + plural(m.un, qty > 1) : ""), lk: mk, src: "memo" };
   const f = !ref.startsWith("m:") && FOOD[ref];
   if (f) {
     const c = calcItem(f.u === "g" ? { ...newItem(f.k), por: "g", g: qty, cook: 0 } : { ...newItem(f.k, { cnt: qty }), cook: 0 });
-    return { ...it, k: f.k, qty, kcal: c.kcal, prot: c.prot, q: c.d, src: "liste" };
+    if (sane(c.kcal)) return { ...it, k: f.k, qty, kcal: c.kcal, prot: c.prot, q: c.d, src: "liste" };
   }
-  return { ...it, qty, lk: learnKey(it.n) };
+  // Valeur gardée telle quelle, mais pas mémorisée si elle contredit une valeur déjà connue
+  return { ...it, qty, lk: m ? "" : learnKey(it.n) };
 }
 function learnItems(items) {
   const L = { ...learned() };
   items.forEach(i => {
     if (i.k || !i.lk || !(+i.kcal > 0)) return;
-    const q = +i.qty > 0 ? +i.qty : 1, un = plural(String(i.q || "").replace(/^[\d.,\s]+/, "").slice(0, 30), false);
+    const q = +i.qty > 0 ? +i.qty : 1, raw = String(i.q || "").replace(/^[≈~\d.,\s]+/, "").slice(0, 30), un = /^g\b/.test(raw) || /≈\s*\d+\s*g/.test(String(i.q || "")) ? "g" : plural(raw, false);
     L[i.lk] = { n: i.n, e: i.e, kc: Math.round(+i.kcal / q * 10) / 10, pr: Math.round((+i.prot || 0) / q * 10) / 10, un: i.src === "memo" && L[i.lk] ? L[i.lk].un : un, at: Date.now() };
   });
   const keys = Object.keys(L);
@@ -1716,7 +1736,7 @@ let REC = null;
 function openVoice() {
   const L = $("listen");
   L.hidden = false; L.className = "listen" + (SR && !IOS ? "" : " kb");
-  document.body.classList.add("lock");
+  document.body.classList.add("lock"); $("app").inert = true;
   // Sur iPhone la reconnaissance du navigateur reste souvent muette (écran sans réaction) : on passe toujours par la dictée du clavier
   const useSR = !!SR && !IOS;
   REC = { rec: null, on: false, useSR };
@@ -1764,8 +1784,8 @@ function startRec() {
 function closeVoice() {
   if (REC) clearTimeout(REC.dog);
   if (REC && REC.rec) { REC.rec.onend = null; REC.rec.onerror = null; try { REC.rec.abort(); } catch (e) {} }
-  REC = null; $("listen").hidden = true; $("listen").innerHTML = "";
-  if ($("sheet").hidden) document.body.classList.remove("lock");
+  REC = null; const L = $("listen"); L.hidden = true; L.innerHTML = ""; L.className = "";
+  if ($("sheet").hidden) { document.body.classList.remove("lock"); $("app").inert = false; }
 }
 function voiceDone() {
   const text = (($("voice-text") || {}).value || "").trim();
@@ -2193,7 +2213,7 @@ async function estimateInComposer() {
   try {
     const res = await analyse(c.desc, c.photo, c.slot);
     if (C !== c) return;
-    res.meals.forEach(m => m.items.forEach(it => c.items.push({ fixed: true, e: it.e, n: it.n, d: it.q, kcal: Math.round(it.kcal), prot: Math.round(it.prot * 10) / 10 })));
+    res.meals.forEach(m => m.items.map(settleItem).forEach(it => c.items.push({ fixed: true, k: it.k || "", e: it.e, n: it.n, d: it.q, kcal: Math.round(it.kcal), prot: Math.round(it.prot * 10) / 10, qty: it.qty, lk: it.lk || "", src: it.src || "" })));
     if (!res.meals.length) c.err = "Claude n'a reconnu aucun aliment.";
     c.tip = res.conseil || ""; c.desc = ""; c.mode = "pick";
     if (c.photoUrl) URL.revokeObjectURL(c.photoUrl); c.photo = null; c.photoUrl = null;
@@ -2215,7 +2235,7 @@ document.addEventListener("input", e => {
     const tot = composerTotals(); $("c-total").textContent = f0(tot.kcal) + " kcal"; $("c-prot").textContent = f0(tot.prot) + " g de protéines";
     return;
   }
-  if (R && t.dataset.rm != null) { const it = R.data.meals[+t.dataset.rm].items[+t.dataset.ri], v = +t.value || 0; if (it.kcal > 0 && v > 0 && it.prot) it.prot = Math.round(it.prot * v / it.kcal * 10) / 10; it.kcal = v; if (it.k && it.src === "liste") { it.lk = learnKey(it.n); delete it.k; } it.src = "edit"; }
+  if (R && t.dataset.rm != null) { const it = R.data.meals[+t.dataset.rm].items[+t.dataset.ri], v = +t.value || 0; if (it.kcal > 0 && v > 0 && it.prot) it.prot = Math.round(it.prot * v / it.kcal * 10) / 10; it.kcal = v; if (it.k && it.src === "liste") { const f = FOOD[it.k]; if (f && f.u === "g") it.q = fkg(it.qty) + " g"; delete it.k; } it.lk = it.lk || learnKey(it.n); it.src = "edit"; }
 });
 document.addEventListener("change", async e => {
   const t = e.target;
@@ -2281,7 +2301,9 @@ document.addEventListener("touchstart", e => {
 }, { passive: true });
 document.addEventListener("touchmove", e => {
   if (!SW.sheet) return;
-  const dy = e.touches[0].clientY - SW.y; SW.dy = dy;
+  const dy = e.touches[0].clientY - SW.y, dx = e.touches[0].clientX - SW.x;
+  if (SW.dy === 0 && Math.abs(dx) > Math.abs(dy)) { SW.sheet = null; return; }
+  SW.dy = dy;
   if (dy > 0) { SW.sheet.style.transform = `translateY(${dy}px)`; SW.sheet.style.transition = "none"; }
 }, { passive: true });
 document.addEventListener("touchend", e => {
@@ -2292,7 +2314,8 @@ document.addEventListener("touchend", e => {
     if (SW.dy > 110) closeSheet(); else { sh.style.transition = "transform .2s"; sh.style.transform = ""; }
     return;
   }
-  if (UI.tab !== "jour" || !$("sheet").hidden || !$("listen").hidden || !$("story").hidden) return;
+  if (UI.tab !== "jour" || !S.profile.setup || !$("sheet").hidden || !$("listen").hidden || !$("story").hidden) return;
+  const ae = document.activeElement; if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && ae.value) return;
   if (Math.abs(dx) < 70 || Math.abs(dy) > 45) return;
   if (e.target.closest(".scroller, .week, input, textarea, select, .stepper, .segbar, .tabbar")) return;
   const n = addDays(UI.date, dx < 0 ? 1 : -1);
@@ -2300,6 +2323,7 @@ document.addEventListener("touchend", e => {
   UI.date = n; render();
   view.classList.remove("slide-l", "slide-r"); void view.offsetWidth; view.classList.add(dx < 0 ? "slide-l" : "slide-r");
 }, { passive: true });
+document.addEventListener("touchcancel", () => { SW.on = false; if (SW.sheet) { SW.sheet.style.transition = "transform .2s"; SW.sheet.style.transform = ""; SW.sheet = null; } }, { passive: true });
 let resizeTm;
 window.addEventListener("resize", () => { clearTimeout(resizeTm); resizeTm = setTimeout(() => { if (UI.tab === "progres" && $("sheet").hidden) render(); }, 200); });
 
