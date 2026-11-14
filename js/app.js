@@ -96,6 +96,7 @@ const FOODS = [
   { k: "biscuit", c: "sna", e: "🍪", n: "Petit biscuit sec (Petit Beurre)", u: "u", kc: 36, pr: 0.6, un: "biscuit", kw: ["biscuit", "petit beurre"] },
   { k: "cookie", c: "sna", e: "🍪", n: "Gros cookie", u: "u", kc: 200, pr: 2.5, un: "cookie", kw: ["cookie"] },
   { k: "choco", c: "sna", e: "🍫", n: "Chocolat", u: "u", kc: 27, pr: 0.4, un: "carré", kw: ["carre de chocolat", "chocolat"] },
+  { k: "choco_noir", c: "sna", e: "🍫", n: "Chocolat noir", u: "u", kc: 30, pr: 0.5, un: "carré (5 g)", kw: ["chocolat noir", "carre de chocolat noir"] },
   { k: "barre", c: "sna", e: "🍫", n: "Barre chocolatée (Mars, Twix, Snickers)", u: "u", kc: 230, pr: 3, un: "barre", kw: ["mars", "twix", "snickers", "barre"] },
   { k: "bonbons", c: "sna", e: "🍬", n: "Bonbons (Haribo…)", u: "u", kc: 140, pr: 2, un: "poignée (40 g)", kw: ["bonbons", "haribo"] },
   { k: "gateau", c: "sna", e: "🍰", n: "Gâteau / tarte", u: "u", kc: 330, pr: 4, un: "part", kw: ["gateau", "tarte"] },
@@ -1555,8 +1556,8 @@ const ANALYSE_SCHEMA = {
   properties: {
     meals: { type: "array", items: { type: "object", additionalProperties: false, required: ["slot", "items"], properties: {
       slot: { type: "string", enum: ["matin", "midi", "gouter", "soir", "soiree"] },
-      items: { type: "array", items: { type: "object", additionalProperties: false, required: ["e", "n", "q", "kcal", "prot"], properties: {
-        e: { type: "string" }, n: { type: "string" }, q: { type: "string" }, kcal: { type: "number" }, prot: { type: "number" } } } } } } },
+      items: { type: "array", items: { type: "object", additionalProperties: false, required: ["ref", "qty", "e", "n", "q", "kcal", "prot"], properties: {
+        ref: { type: "string" }, qty: { type: "number" }, e: { type: "string" }, n: { type: "string" }, q: { type: "string" }, kcal: { type: "number" }, prot: { type: "number" } } } } } } },
     walk_min: { type: "integer" }, weight_kg: { type: "number" }, whey_doses: { type: "integer" }, creatine: { type: "boolean" }, pain: { type: "integer" }, conseil: { type: "string" }
   }
 };
@@ -1571,7 +1572,45 @@ Règles :
 - walk_min : minutes de marche ou de vélo mentionnées, sinon 0. weight_kg : poids mentionné, sinon 0. whey_doses : nombre de shakers de whey mentionnés, sinon 0 (ne les mets pas dans les repas). creatine : true seulement si la créatine est mentionnée. pain : douleur notée sur 10 si mentionnée, sinon -1.
 - Alcool : une bière = demi de 25 cl sauf si « pinte » ; compte le soda des mélanges (rhum coca…). Ne juge pas, donne les calories.
 - conseil : une phrase concrète et bienveillante en français pour faire mieux la prochaine fois, ou "" si tout va bien.
-- Ne invente rien qui n'est pas dit ou visible.`;
+- Ne invente rien qui n'est pas dit ou visible.
+- Constance : un même aliment doit toujours compter pareil. Si un aliment correspond à une ligne des listes ci-dessous, mets sa clé dans ref et dans qty le nombre d'unités (ou les grammes quand l'unité est « g »). Ses calories seront calculées par l'app, ne les réinvente pas. Choisis la ligne la plus précise (« chocolat noir » plutôt que « chocolat »). Sinon ref = "" et qty = nombre d'unités dites (1 par défaut), avec tes estimations dans kcal et prot pour la quantité totale.
+Aliments déjà notés par lui (clé | nom | kcal par unité) :
+${learnedList() || "(aucun pour l'instant)"}
+Liste de l'app (clé | nom | unité | kcal) :
+${FOODS.concat(myFoods()).map(f => f.k + " | " + f.n + " | " + (f.u === "g" ? "g | " + f.kc + " pour 100 g" : f.un + " | " + f.kc)).join("\n")}`;
+}
+// Aliments appris : ce qu'il a déjà noté (et éventuellement corrigé), pour que le même aliment compte toujours pareil
+const learned = () => S.profile.learned || {};
+function learnedList() {
+  return Object.entries(learned()).sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, 150).map(([k, v]) => `m:${k} | ${v.n} | ${v.kc}${v.un ? " par " + v.un : ""}`).join("\n");
+}
+// Accorde le premier mot d'une unité (« carré » ↔ « carrés »)
+const plural = (un, many) => { const [w, ...rest] = un.split(" "); const v = many ? (/[sx]$/.test(w) || !w ? w : w + "s") : (/[^s][sx]$/.test(w) ? w.slice(0, -1) : w); return [v, ...rest].join(" "); };
+const learnKey = n => norm(n).replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+// Recalcule un aliment rendu par Claude à partir de la liste ou de la mémoire
+function settleItem(it) {
+  const qty = +it.qty > 0 ? +it.qty : 1;
+  const ref = String(it.ref || "");
+  // Une valeur déjà notée (ou corrigée à la main) passe avant la liste
+  const mk = ref.startsWith("m:") ? ref.slice(2) : learnKey(it.n), m = learned()[mk];
+  if (m) return { ...it, n: m.n, e: m.e || it.e, qty, kcal: Math.round(m.kc * qty), prot: Math.round(m.pr * qty * 10) / 10, q: fkg(qty) + (m.un ? " " + plural(m.un, qty > 1) : ""), lk: mk, src: "memo" };
+  const f = !ref.startsWith("m:") && FOOD[ref];
+  if (f) {
+    const c = calcItem(f.u === "g" ? { ...newItem(f.k), por: "g", g: qty, cook: 0 } : { ...newItem(f.k, { cnt: qty }), cook: 0 });
+    return { ...it, k: f.k, qty, kcal: c.kcal, prot: c.prot, q: c.d, src: "liste" };
+  }
+  return { ...it, qty, lk: learnKey(it.n) };
+}
+function learnItems(items) {
+  const L = { ...learned() };
+  items.forEach(i => {
+    if (i.k || !i.lk || !(+i.kcal > 0)) return;
+    const q = +i.qty > 0 ? +i.qty : 1, un = plural(String(i.q || "").replace(/^[\d.,\s]+/, "").slice(0, 30), false);
+    L[i.lk] = { n: i.n, e: i.e, kc: Math.round(+i.kcal / q * 10) / 10, pr: Math.round((+i.prot || 0) / q * 10) / 10, un: i.src === "memo" && L[i.lk] ? L[i.lk].un : un, at: Date.now() };
+  });
+  const keys = Object.keys(L);
+  if (keys.length > 400) keys.sort((a, b) => (L[a].at || 0) - (L[b].at || 0)).slice(0, keys.length - 400).forEach(k => delete L[k]);
+  S.profile.learned = L;
 }
 async function analyse(text, photo, slot) {
   const content = [];
@@ -1613,6 +1652,7 @@ async function runAnalysis(text, photo) {
   } catch (e) { r.err = explain(e); r.data = localParse(text || "", slot); r.data.local = true; }
   if (R !== r) return;
   r.busy = false;
+  if (!r.data.local) r.data.meals.forEach(m => { m.items = m.items.map(settleItem); });
   r.data.meals.forEach(m => m.items.forEach(it => { it.keep = true; }));
   r.keep = { walk: r.data.walk_min > 0, weight: r.data.weight_kg > 0, whey: r.data.whey_doses > 0, crea: !!r.data.creatine, pain: r.data.pain >= 0 };
   renderReview();
@@ -1628,7 +1668,7 @@ function renderReview() {
     body += `<p class="small muted">« ${esc(R.text)} »</p>`;
     d.meals.forEach((m, mi) => {
       const sl = SLOTS.find(x => x.k === m.slot) || SLOTS[1];
-      body += `<div class="slot"><div class="slot-head ${sl.col}"><b>${sl.n}</b><span class="tag t-none">${f0(m.items.filter(i => i.keep).reduce((a, i) => a + (+i.kcal || 0), 0))} kcal</span></div><div class="slot-body">${m.items.map((it, ii) => `<div class="item" style="${it.keep ? "" : "opacity:.4"}"><span class="emo">${esc(it.e || "🍽️")}</span><span>${esc(it.n)}<small>${esc(it.q)}</small></span><span class="row" style="gap:4px;flex-wrap:nowrap"><input class="kcalin" type="number" inputmode="numeric" id="rv-${mi}-${ii}" data-rm="${mi}" data-ri="${ii}" value="${Math.round(it.kcal)}" aria-label="Calories de ${esc(it.n)}" style="width:72px"><button class="x" data-act="rv-toggle" data-m="${mi}" data-i="${ii}" aria-label="${it.keep ? "Retirer" : "Remettre"} ${esc(it.n)}">${it.keep ? "×" : "↺"}</button></span></div>`).join("")}</div></div>`;
+      body += `<div class="slot"><div class="slot-head ${sl.col}"><b>${sl.n}</b><span class="tag t-none">${f0(m.items.filter(i => i.keep).reduce((a, i) => a + (+i.kcal || 0), 0))} kcal</span></div><div class="slot-body">${m.items.map((it, ii) => `<div class="item" style="${it.keep ? "" : "opacity:.4"}"><span class="emo">${esc(it.e || "🍽️")}</span><span>${esc(it.n)}<small>${esc(it.q)}${it.src === "memo" ? " · ✓ comme d'habitude" : it.src === "liste" ? " · ✓ valeur de la liste" : ""}</small></span><span class="row" style="gap:4px;flex-wrap:nowrap"><input class="kcalin" type="number" inputmode="numeric" id="rv-${mi}-${ii}" data-rm="${mi}" data-ri="${ii}" value="${Math.round(it.kcal)}" aria-label="Calories de ${esc(it.n)}" style="width:72px"><button class="x" data-act="rv-toggle" data-m="${mi}" data-i="${ii}" aria-label="${it.keep ? "Retirer" : "Remettre"} ${esc(it.n)}">${it.keep ? "×" : "↺"}</button></span></div>`).join("")}</div></div>`;
     });
     const extra = [];
     if (d.walk_min > 0) extra.push(["walk", `🚶 ${d.walk_min} min de marche ou vélo`]);
@@ -1652,6 +1692,7 @@ function saveReview() {
   if (!S.days[date]) S.days[date] = day(date);
   const D = S.days[date];
   let n = 0;
+  if (!d.local) learnItems(d.meals.flatMap(m => m.items.filter(i => i.keep)));
   d.meals.forEach(m => {
     const items = m.items.filter(i => i.keep && (+i.kcal > 0 || +i.prot > 0)).map(i => ({ ...(i.k ? { k: i.k } : {}), e: i.e, n: i.n, d: i.q, kcal: Math.round(+i.kcal), prot: Math.round((+i.prot || 0) * 10) / 10 }));
     if (items.length) { D.meals.push({ id: uid(), slot: m.slot, items, tip: d.conseil || "" }); n += items.length; }
@@ -1674,19 +1715,21 @@ let REC = null;
 // Sur iPhone, une appli installée n'a souvent pas accès à la reconnaissance vocale du navigateur : on passe alors par la dictée du clavier
 function openVoice() {
   const L = $("listen");
-  L.hidden = false; L.className = "listen";
+  L.hidden = false; L.className = "listen" + (SR && !IOS ? "" : " kb");
   document.body.classList.add("lock");
-  const useSR = !!SR && !(IOS && STANDALONE);
+  // Sur iPhone la reconnaissance du navigateur reste souvent muette (écran sans réaction) : on passe toujours par la dictée du clavier
+  const useSR = !!SR && !IOS;
   REC = { rec: null, on: false, useSR };
   L.innerHTML = `<div class="mid">
-      <span class="mono" id="v-hint">${useSR ? "Je t'écoute…" : "Touche le 🎤 de ton clavier et parle"}</span>
+      <span class="mono" id="v-hint">${useSR ? "Je t'écoute…" : "Touche le 🎤 en bas de ton clavier et parle"}</span>
       ${useSR ? `<button class="orb" data-act="voice-toggle" aria-label="Arrêter ou reprendre l'écoute">${ICON_MIC}</button>` : ""}
       <label class="sr" for="voice-text">Ce que tu as mangé ou fait</label>
       <textarea id="voice-text" class="said-box" placeholder="Ex. : ce soir, filet mignon au beurre avec deux coings poêlés"></textarea>
-      <span class="small">Tu peux corriger le texte avant d'analyser.</span>
+      <span class="small">${useSR ? "Tu peux corriger le texte avant d'analyser." : "Le clavier ne s'ouvre pas ? Touche le cadre blanc."}</span>
     </div>
     <div class="acts"><button class="btn" data-act="voice-cancel">Annuler</button><button class="btn ink" data-act="voice-done">Analyser</button></div>`;
-  if (useSR) startRec(); else setTimeout(() => { const t = $("voice-text"); if (t) t.focus(); }, 60);
+  // Le focus doit être donné tout de suite, dans le geste du doigt, sinon iOS n'ouvre pas le clavier
+  if (useSR) startRec(); else { const t = $("voice-text"); if (t) t.focus(); }
 }
 function voiceHint(t) { const h = $("v-hint"); if (h) h.textContent = t; }
 function startRec() {
@@ -1713,10 +1756,13 @@ function startRec() {
     else if ($("v-hint").textContent === "Je t'écoute…") voiceHint("Touche le micro rouge pour parler, ou dicte au clavier");
   };
   REC.rec = rec;
+  clearTimeout(REC.dog);
+  REC.dog = setTimeout(() => { if (REC && REC.rec === rec && !heard) { try { rec.abort(); } catch (e) {} L.className = "listen kb"; voiceHint("Je n'entends rien : écris ou dicte avec le 🎤 du clavier"); } }, 7000);
   try { rec.start(); REC.on = true; L.className = "listen on"; voiceHint("Je t'écoute…"); }
   catch (e) { voiceHint("Touche le 🎤 de ton clavier et parle"); ta.focus(); }
 }
 function closeVoice() {
+  if (REC) clearTimeout(REC.dog);
   if (REC && REC.rec) { REC.rec.onend = null; REC.rec.onerror = null; try { REC.rec.abort(); } catch (e) {} }
   REC = null; $("listen").hidden = true; $("listen").innerHTML = "";
   if ($("sheet").hidden) document.body.classList.remove("lock");
@@ -2169,7 +2215,7 @@ document.addEventListener("input", e => {
     const tot = composerTotals(); $("c-total").textContent = f0(tot.kcal) + " kcal"; $("c-prot").textContent = f0(tot.prot) + " g de protéines";
     return;
   }
-  if (R && t.dataset.rm != null) { R.data.meals[+t.dataset.rm].items[+t.dataset.ri].kcal = +t.value || 0; }
+  if (R && t.dataset.rm != null) { const it = R.data.meals[+t.dataset.rm].items[+t.dataset.ri], v = +t.value || 0; if (it.kcal > 0 && v > 0 && it.prot) it.prot = Math.round(it.prot * v / it.kcal * 10) / 10; it.kcal = v; if (it.k && it.src === "liste") { it.lk = learnKey(it.n); delete it.k; } it.src = "edit"; }
 });
 document.addEventListener("change", async e => {
   const t = e.target;

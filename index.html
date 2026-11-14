@@ -325,6 +325,9 @@ tr:last-child td { border-bottom: 0; }
 @keyframes ring { from { transform: scale(.9); opacity: .8; } to { transform: scale(1.5); opacity: 0; } }
 .listen .said-box { font-family: var(--f-display); font-weight: 700; font-size: 22px; line-height: 1.2; background: #fff; color: var(--block-ink); border: 3px solid var(--block-ink); border-radius: 18px; width: 100%; max-width: 480px; min-height: 150px; padding: 14px; }
 .listen .said-box::placeholder { color: rgba(21, 17, 30, .45); }
+.listen.kb { grid-template-rows: auto auto; align-content: start; }
+.listen.kb .mid { align-content: start; gap: 14px; }
+.listen.kb .said-box { min-height: 120px; }
 .listen .acts { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .listen .btn { background: #fff; color: var(--block-ink); border-color: var(--block-ink); box-shadow: 3px 3px 0 var(--block-ink); min-width: 130px; }
 .listen .btn.ink { background: var(--block-ink); color: #fff; }
