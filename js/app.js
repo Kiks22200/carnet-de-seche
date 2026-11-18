@@ -515,7 +515,6 @@ function viewOnboarding() {
         <label class="field" for="o-g">Objectif (kg)<input id="o-g" type="number" inputmode="decimal" step="0.1" required min="35" max="250"></label>
         <label class="field" for="o-d">Pour le<input id="o-d" type="date" required value="${addDays(today(), 56)}"></label>
       </div>
-      <label class="row small" for="o-t"><input id="o-t" type="checkbox"> J'ai une blessure à surveiller (tendon, articulation)</label>
       <label class="field" for="o-c">Ce que Claude doit savoir sur toi (facultatif)<textarea id="o-c" placeholder="Ex. : on cuisine pour moi, souvent au beurre. Je ne pèse pas, sauf les pâtes. 3 séances de muscu par semaine."></textarea></label>
       <button class="btn hot" type="submit">C'est parti</button>
     </form>
@@ -597,8 +596,8 @@ function viewJour() {
 
   const sp = D.supp || {};
   h += `<section class="grid2">
-    ${activePowders().map(w => `<div class="card" style="gap:8px"><div class="row between" style="flex-wrap:nowrap"><b style="min-width:0">💪 ${esc(w.n)}</b><span class="mono muted">${fkg(w.g)} g</span></div><span class="small muted">${fkg(w.kcal)} kcal · ${fkg(w.prot)} g prot.</span><div class="stepper" style="justify-self:start"><button data-act="whey" data-w="${w.id}" data-v="-1" aria-label="Retirer une dose de ${esc(w.n)}">−</button><span class="v">${dosesOf(D, w.id)}</span><button data-act="whey" data-w="${w.id}" data-v="1" aria-label="Ajouter une dose de ${esc(w.n)}">+</button></div></div>`).join("")}
-    <div class="card" style="gap:8px"><div class="row between"><b>⚡ Créatine</b><span class="mono muted">${fkg(p.creaG)} g</span></div><span class="small muted">0 kcal, tous les jours</span><button class="toggle" data-act="crea" aria-pressed="${!!sp.crea}" aria-label="Créatine prise"></button></div>
+    ${activePowders().map(w => `<div class="card" style="gap:8px"><div class="row between" style="flex-wrap:nowrap"><b style="min-width:0">💪 ${esc(w.n)}</b><span class="mono muted">${fkg(w.g)} g</span></div><span class="small muted">${fkg(w.kcal)} kcal et ${fkg(w.prot)} g prot. par dose</span><div class="stepper" style="justify-self:start"><button data-act="whey" data-w="${w.id}" data-v="-1" aria-label="Retirer une dose de ${esc(w.n)}">−</button><span class="v">${dosesOf(D, w.id)}</span><button data-act="whey" data-w="${w.id}" data-v="1" aria-label="Ajouter une dose de ${esc(w.n)}">+</button></div></div>`).join("")}
+    <div class="card" style="gap:8px"><div class="row between"><b>⚡ Créatine</b><span class="mono muted">${fkg(p.creaG)} g</span></div><span class="small muted">La créatine n'a pas de calories</span><button class="toggle" data-act="crea" aria-pressed="${!!sp.crea}" aria-label="Créatine prise"></button></div>
   </section>`;
   h += `<section class="card" style="gap:10px"><div class="row between"><b>👟 Pas du jour</b><button class="btn small" data-act="health-paste">⌚ Importer de Santé</button></div>
     <div class="row"><input type="number" inputmode="numeric" id="steps-in" data-steps="1" value="${D.steps != null ? D.steps : ""}" placeholder="Ex. 8 500" aria-label="Nombre de pas du jour" style="width:150px;font-family:var(--f-display);font-weight:800;font-size:22px"><span class="small muted">${D.activeKcal ? f0(D.activeKcal) + " kcal actives (pour info)" : "Écris-les, ou importe-les avec ton raccourci."}</span></div></section>`;
@@ -1695,7 +1694,7 @@ function renderReview() {
     if (d.weight_kg > 0) extra.push(["weight", `⚖️ Pesée : ${f1(d.weight_kg)} kg`]);
     if (d.whey_doses > 0 && activePowders().length) extra.push(["whey", `💪 ${esc(activePowders()[0].n)} × ${d.whey_doses}`]);
     if (d.creatine) extra.push(["crea", "⚡ Créatine prise"]);
-    if (d.pain >= 0) extra.push(["pain", `🩹 Douleur ${d.pain}/10`]);
+    if (d.pain >= 0 && S.profile.tendon) extra.push(["pain", `🩹 Douleur ${d.pain}/10`]);
     if (extra.length) body += `<div class="card" style="gap:8px">${extra.map(([key, label]) => `<div class="row between"><span>${label}</span><button class="toggle" data-act="rv-extra" data-k="${key}" aria-pressed="${!!k[key]}" aria-label="Enregistrer : ${esc(label)}"></button></div>`).join("")}</div>`;
     if (!d.meals.length && !extra.length) body += `<div class="empty">Je n'ai rien reconnu. Réessaie en donnant les aliments, ou choisis dans la liste.</div><button class="btn" data-act="rv-list">Choisir dans la liste</button>`;
     if (d.conseil) body += `<div class="blk b-lilac"><span class="mono">Conseil</span><p>${esc(d.conseil)}</p></div>`;
@@ -1722,7 +1721,7 @@ function saveReview() {
   if (k.whey || k.crea) D.supp = { ...(D.supp || {}) };
   if (k.whey && activePowders().length) { const id = activePowders()[0].id; D.supp.p = { ...(D.supp.p || {}), [id]: dosesOf(D, id) + d.whey_doses }; }
   if (k.crea) D.supp.crea = true;
-  if (k.pain) D.pain = clamp(d.pain, 0, 10);
+  if (k.pain && S.profile.tendon) D.pain = clamp(d.pain, 0, 10);
   saveDay(date); closeSheet(); UI.tab = "jour"; render();
   toast(n ? `${n} aliment${n > 1 ? "s" : ""} enregistré${n > 1 ? "s" : ""}` : "Enregistré", true);
 }
@@ -2047,7 +2046,7 @@ document.addEventListener("submit", e => {
     if (!(goal < kg)) { toast("L'objectif doit être sous ton poids actuel"); return; }
     if (!(g("o-d") > today())) { toast("Choisis une date d'objectif dans le futur"); return; }
     const keep = S.profile;
-    S.profile = { ...BLANK_PROFILE, ...keep, setup: true, sex, heightCm: +g("o-h"), age: +g("o-a"), startKg: kg, startDate: today(), goalKg: goal, goalDate: g("o-d"), prot: round5(2 * goal), tendon: $("o-t").checked || !!keep.tendon, context: g("o-c").trim() || keep.context || "" };
+    S.profile = { ...BLANK_PROFILE, ...keep, setup: true, sex, heightCm: +g("o-h"), age: +g("o-a"), startKg: kg, startDate: today(), goalKg: goal, goalDate: g("o-d"), prot: round5(2 * goal), tendon: !!keep.tendon, context: g("o-c").trim() || keep.context || "" };
     S.days[today()] = { ...day(today()), kg, u: Date.now() };
     save(); render(); toast("C'est parti !");
   }
@@ -2080,7 +2079,7 @@ document.addEventListener("click", e => {
     case "add-photo": openComposer({ mode: "ai" }); { const inp = $("c-photo"); if (inp) inp.click(); } break;
     case "pick-photo": { const inp = $("c-photo"); if (inp) inp.click(); break; }
     case "edit-meal": { const m = day(UI.date).meals.find(x => x.id === a.dataset.id); if (m) openComposer({ id: m.id, slot: m.slot, items: m.items, tip: m.tip }); break; }
-    case "whey": { const d = D(), id = a.dataset.w; d.supp = { ...(d.supp || {}) }; d.supp.p = { ...(d.supp.p || {}), [id]: clamp(dosesOf(d, id) + +a.dataset.v, 0, 6) }; saveDay(UI.date); render(); break; }
+    case "whey": { const d = D(), id = a.dataset.w, w = powders().find(x => x.id === id), before = dosesOf(d, id); d.supp = { ...(d.supp || {}) }; d.supp.p = { ...(d.supp.p || {}), [id]: clamp(before + +a.dataset.v, 0, 6) }; saveDay(UI.date); render(); if (w && dosesOf(d, id) !== before) toast(`${+a.dataset.v > 0 ? "+" : "−"}1 dose de ${w.n} : ${fkg(w.kcal)} kcal et ${fkg(w.prot)} g de protéines ${+a.dataset.v > 0 ? "comptés" : "retirés"}`); break; }
     case "pw-add": { const pre = POWDER_PRESETS[+a.dataset.i] || { n: "Nouveau pot", g: 30, kcal: 115, prot: 23 }; S.profile.wheys = [...powders(), { id: "w" + uid(), ...pre }]; save(); render(); toast(pre.n + " ajouté"); break; }
     case "pw-del": if (a.dataset.confirm) { S.profile.wheys = powders().map(w => w.id === a.dataset.w ? { ...w, off: true } : w); save(); render(); toast("Pot retiré (les jours passés restent comptés)"); } else { a.dataset.confirm = "1"; a.textContent = "?"; a.setAttribute("aria-label", "Confirmer la suppression"); toast("Touche encore pour supprimer ce pot"); } break;
     case "cloud-on": cloudEnable(); break;
